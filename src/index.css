@@ -471,6 +471,11 @@ body::before {
   filter: drop-shadow(0 0 8px rgba(249, 115, 22, 0.7));
 }
 
+.custom-wind-icon.active-wind-marker .wind-label {
+  border-color: rgba(249, 115, 22, 0.5) !important;
+  box-shadow: 0 0 10px rgba(249, 115, 22, 0.25);
+}
+
 .custom-wind-icon {
   overflow: visible !important;
 }
