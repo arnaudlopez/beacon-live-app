@@ -1,22 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { SOURCES, NOTIF_COOLDOWN, DEFAULT_NOTIFICATION_THRESHOLD } from '../config/sources';
+import { SOURCES, NOTIF_COOLDOWN } from '../config/sources';
 
-const STORAGE_KEY = 'beacon_notification_settings';
+const STORAGE_KEY = 'beacon_notification_settings_v2';
+
+const DEFAULT_SETTINGS = { enabled: false, avgEnabled: false, avgThreshold: 10, gustEnabled: true, gustThreshold: 15 };
 
 function loadSettings() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      const parsed = JSON.parse(saved);
-      // Migration: add alertMode if missing from older settings
-      Object.keys(parsed).forEach(id => {
-        if (!parsed[id].alertMode) parsed[id].alertMode = 'gust';
-      });
-      return parsed;
-    }
+    if (saved) return JSON.parse(saved);
   } catch { /* ignore */ }
   const initial = {};
-  SOURCES.forEach(s => { initial[s.id] = { enabled: false, threshold: DEFAULT_NOTIFICATION_THRESHOLD, alertMode: 'gust' }; });
+  SOURCES.forEach(s => { initial[s.id] = { ...DEFAULT_SETTINGS }; });
   return initial;
 }
 
@@ -43,61 +38,53 @@ function sendNotification(title, options) {
 }
 
 /**
- * Manages per-spot notification settings, permissions, and alert dispatching.
- * alertMode: 'gust' | 'avg' | 'both'
+ * Per-spot notifications with independent avg/gust thresholds.
+ * Alert fires when ALL enabled conditions are met (AND logic).
  */
 export function useNotifications(allWindData) {
   const [settings, setSettings] = useState(loadSettings);
   const lastNotificationTimes = useRef({});
   const previousValues = useRef({});
 
-  useEffect(() => {
-    saveSettings(settings);
-  }, [settings]);
+  useEffect(() => { saveSettings(settings); }, [settings]);
 
-  const setThreshold = useCallback((sourceId, value) => {
+  const update = useCallback((sourceId, patch) => {
     setSettings(prev => ({
       ...prev,
-      [sourceId]: { ...prev[sourceId], threshold: Number(value) }
-    }));
-  }, []);
-
-  const setAlertMode = useCallback((sourceId, mode) => {
-    setSettings(prev => ({
-      ...prev,
-      [sourceId]: { ...prev[sourceId], alertMode: mode }
+      [sourceId]: { ...(prev[sourceId] || DEFAULT_SETTINGS), ...patch }
     }));
   }, []);
 
   const toggle = useCallback(async (sourceId, sourceName) => {
-    const current = settings[sourceId];
+    const current = settings[sourceId] || DEFAULT_SETTINGS;
     if (!current.enabled) {
       if (!('Notification' in window)) {
         alert("Ce navigateur ne supporte pas les notifications desktop");
         return;
       }
+      if (!current.avgEnabled && !current.gustEnabled) {
+        alert("Active au moins un type d'alerte (Moy ou Raf) avant d'activer !");
+        return;
+      }
       const perm = await Notification.requestPermission();
       if (perm === 'granted') {
-        setSettings(prev => ({
-          ...prev,
-          [sourceId]: { ...prev[sourceId], enabled: true }
-        }));
-
-        const modeLabel = { gust: 'rafales', avg: 'vent moyen', both: 'moy. + rafales' }[current.alertMode || 'gust'];
-        const msg = `Alertes activées pour ${sourceName} — seuil ${current.threshold} kts (${modeLabel}).`;
-        sendNotification('Alertes Activées 🌬️', { body: msg, icon: '/favicon.svg' });
+        update(sourceId, { enabled: true });
+        const parts = [];
+        if (current.avgEnabled) parts.push(`moy ≥ ${current.avgThreshold} kts`);
+        if (current.gustEnabled) parts.push(`raf ≥ ${current.gustThreshold} kts`);
+        sendNotification('Alertes Activées 🌬️', {
+          body: `${sourceName} — ${parts.join(' ET ')}`,
+          icon: '/favicon.svg'
+        });
       } else {
         alert('Veuillez autoriser les notifications dans les paramètres de votre navigateur.');
       }
     } else {
-      setSettings(prev => ({
-        ...prev,
-        [sourceId]: { ...prev[sourceId], enabled: false }
-      }));
+      update(sourceId, { enabled: false });
     }
-  }, [settings]);
+  }, [settings, update]);
 
-  // Monitor all enabled spots for threshold crossing
+  // Monitor threshold crossings
   useEffect(() => {
     if (!allWindData || Object.keys(allWindData).length === 0) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
@@ -106,56 +93,50 @@ export function useNotifications(allWindData) {
     SOURCES.forEach(source => {
       const s = settings[source.id];
       if (!s || !s.enabled) return;
+      if (!s.avgEnabled && !s.gustEnabled) return;
 
       const windInfo = allWindData[source.id];
       if (!windInfo || !windInfo.live) return;
 
       const gust = parseFloat(windInfo.live.windGust);
       const avg = parseFloat(windInfo.live.windSpeed);
-      const mode = s.alertMode || 'gust';
-      const prevKey = source.id;
-      const prev = previousValues.current[prevKey] || {};
+      const prev = previousValues.current[source.id] || {};
+      previousValues.current[source.id] = { gust, avg };
 
-      // Update previous values
-      previousValues.current[prevKey] = { gust, avg };
+      // Check ALL enabled conditions (AND logic)
+      let allMet = true;
+      let anyJustCrossed = false;
+      const parts = [];
 
-      // Check which metrics should be evaluated based on alertMode
-      const checks = [];
-      if (mode === 'gust' || mode === 'both') {
-        if (!isNaN(gust) && gust >= s.threshold) {
-          const justCrossed = prev.gust === undefined || prev.gust < s.threshold;
-          checks.push({ type: 'rafale', value: gust, justCrossed });
+      if (s.gustEnabled) {
+        if (isNaN(gust) || gust < s.gustThreshold) { allMet = false; }
+        else {
+          parts.push(`raf: ${gust} kts`);
+          if (prev.gust === undefined || prev.gust < s.gustThreshold) anyJustCrossed = true;
         }
       }
-      if (mode === 'avg' || mode === 'both') {
-        if (!isNaN(avg) && avg >= s.threshold) {
-          const justCrossed = prev.avg === undefined || prev.avg < s.threshold;
-          checks.push({ type: 'vent moyen', value: avg, justCrossed });
+      if (s.avgEnabled) {
+        if (isNaN(avg) || avg < s.avgThreshold) { allMet = false; }
+        else {
+          parts.push(`moy: ${avg} kts`);
+          if (prev.avg === undefined || prev.avg < s.avgThreshold) anyJustCrossed = true;
         }
       }
 
-      if (checks.length === 0) return;
+      if (!allMet) return;
 
-      // Check if any metric just crossed OR cooldown expired
-      const anyJustCrossed = checks.some(c => c.justCrossed);
       const lastTime = lastNotificationTimes.current[source.id] || 0;
       const cooldownExpired = (now - lastTime) >= NOTIF_COOLDOWN;
-
       if (!anyJustCrossed && !cooldownExpired) return;
 
-      // Build notification message
-      const triggered = checks.map(c => `${c.type}: ${c.value} kts`).join(' · ');
-      const title = `⚠️ Alerte ${source.name}`;
-      const options = {
-        body: `${triggered} (seuil: ${s.threshold} kts)`,
+      sendNotification(`⚠️ Alerte ${source.name}`, {
+        body: parts.join(' · '),
         icon: '/favicon.svg',
         tag: `alert-${source.id}`
-      };
-
-      sendNotification(title, options);
+      });
       lastNotificationTimes.current[source.id] = now;
     });
   }, [allWindData, settings]);
 
-  return { settings, setThreshold, setAlertMode, toggle };
+  return { settings, update, toggle, DEFAULT_SETTINGS };
 }

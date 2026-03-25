@@ -150,8 +150,17 @@ export default function Dashboard() {
     return '';
   }, [windData, activeSource.id, activeSource.name, isLoading, fetchError]);
 
-  const currentAlertSettings = notifications.settings[activeSource.id] || { enabled: false, threshold: 25 };
+  const currentAlertSettings = notifications.settings[activeSource.id] || notifications.DEFAULT_SETTINGS;
   const beaufort = weatherData ? getBeaufort(weatherData.windGust) : null;
+  const isLocked = currentAlertSettings.enabled;
+
+  const thresholdInputStyle = (active) => ({
+    width: '44px', background: active ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.15)',
+    border: `1px solid ${active ? 'var(--border-glass)' : 'rgba(255,255,255,0.1)'}`,
+    color: active ? 'white' : 'var(--text-secondary)', padding: '0.3rem', borderRadius: '0.4rem',
+    textAlign: 'center', fontSize: '0.8rem', fontFamily: 'var(--font-heading)', fontWeight: 700,
+    opacity: active ? 1 : 0.5
+  });
 
   return (
     <div className="dashboard-container">
@@ -178,51 +187,56 @@ export default function Dashboard() {
       </nav>
 
       <div className="alert-bar glass-panel" role="region" aria-label="Paramètres d'alerte">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
-          <label htmlFor="alert-threshold" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>🔔 Alerte :</label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>🔔</span>
+          {/* Avg threshold */}
+          <button
+            className={`source-toggle-btn ${currentAlertSettings.avgEnabled ? 'active' : ''}`}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', minWidth: 'unset' }}
+            onClick={() => notifications.update(activeSource.id, { avgEnabled: !currentAlertSettings.avgEnabled })}
+            disabled={isLocked}
+          >Moy</button>
           <input
-            id="alert-threshold"
             type="number"
-            value={currentAlertSettings.threshold}
-            onChange={(e) => notifications.setThreshold(activeSource.id, e.target.value)}
-            style={{ width: '48px', background: 'rgba(0,0,0,0.3)', border: '1px solid var(--border-glass)', color: 'white', padding: '0.35rem', borderRadius: '0.4rem', textAlign: 'center', fontSize: '0.85rem', fontFamily: 'var(--font-heading)', fontWeight: 700 }}
-            disabled={currentAlertSettings.enabled}
+            value={currentAlertSettings.avgThreshold}
+            onChange={(e) => notifications.update(activeSource.id, { avgThreshold: Number(e.target.value) })}
+            style={thresholdInputStyle(currentAlertSettings.avgEnabled)}
+            disabled={isLocked || !currentAlertSettings.avgEnabled}
             min={1} max={100}
           />
-          <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>kts</span>
-          <div style={{ display: 'flex', gap: '2px', marginLeft: '0.3rem' }}>
-            {[
-              { mode: 'avg', label: 'Moy' },
-              { mode: 'gust', label: 'Raf' },
-              { mode: 'both', label: 'Les 2' }
-            ].map(({ mode, label }) => (
-              <button
-                key={mode}
-                className={`source-toggle-btn ${(currentAlertSettings.alertMode || 'gust') === mode ? 'active' : ''}`}
-                style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minWidth: 'unset' }}
-                onClick={() => notifications.setAlertMode(activeSource.id, mode)}
-                disabled={currentAlertSettings.enabled}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.7rem', margin: '0 0.1rem' }}>+</span>
+          {/* Gust threshold */}
+          <button
+            className={`source-toggle-btn ${currentAlertSettings.gustEnabled ? 'active' : ''}`}
+            style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', minWidth: 'unset' }}
+            onClick={() => notifications.update(activeSource.id, { gustEnabled: !currentAlertSettings.gustEnabled })}
+            disabled={isLocked}
+          >Raf</button>
+          <input
+            type="number"
+            value={currentAlertSettings.gustThreshold}
+            onChange={(e) => notifications.update(activeSource.id, { gustThreshold: Number(e.target.value) })}
+            style={thresholdInputStyle(currentAlertSettings.gustEnabled)}
+            disabled={isLocked || !currentAlertSettings.gustEnabled}
+            min={1} max={100}
+          />
+          <span style={{ color: 'var(--text-secondary)', fontSize: '0.75rem' }}>kts</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           {SOURCES.filter(s => notifications.settings[s.id]?.enabled).map(s => {
+            const ss = notifications.settings[s.id];
             const wind = windData[s.id];
             const gust = wind?.live ? parseFloat(wind.live.windGust) : 0;
             const avg = wind?.live ? parseFloat(wind.live.windSpeed) : 0;
-            const threshold = notifications.settings[s.id].threshold;
-            const mode = notifications.settings[s.id].alertMode || 'gust';
-            const isOver = (mode === 'gust' || mode === 'both') ? gust >= threshold : false;
-            const isOverAvg = (mode === 'avg' || mode === 'both') ? avg >= threshold : false;
+            let allMet = true;
+            if (ss.gustEnabled && gust < ss.gustThreshold) allMet = false;
+            if (ss.avgEnabled && avg < ss.avgThreshold) allMet = false;
             const isCurrent = s.id === activeSource.id;
             return (
               <span
                 key={s.id}
-                className={`alert-spot-indicator ${(isOver || isOverAvg) ? 'alert-spot-over' : ''} ${isCurrent ? 'alert-spot-current' : ''}`}
-                title={`${s.name}: moy ${avg} / raf ${gust} kts (seuil: ${threshold}, mode: ${mode})`}
+                className={`alert-spot-indicator ${allMet ? 'alert-spot-over' : ''} ${isCurrent ? 'alert-spot-current' : ''}`}
+                title={`${s.name}: moy ${avg} / raf ${gust} kts`}
                 onClick={() => setActiveSource(SOURCES.find(src => src.id === s.id))}
                 role="button"
                 tabIndex={0}
