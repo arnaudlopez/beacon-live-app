@@ -27,12 +27,12 @@ RUN npm run build
 # Étape 2 : Serveur web (Nginx) pour servir les fichiers statiques
 FROM nginx:alpine
 
-# Copier le template nginx (le token Infoclimat sera injecté à l'exécution via envsubst)
-COPY nginx.conf.template /etc/nginx/templates/default.conf.template
+# Le token Infoclimat est injecté dans le nginx.conf au build (jamais dans le JS client)
+ARG VITE_INFOCLIMAT_TOKEN
 
-# Copier l'entrypoint qui injecte les variables d'environnement dans le template
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
+# Copier la configuration Nginx et injecter le token via sed
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+RUN sed -i "s|__INFOCLIMAT_TOKEN__|${VITE_INFOCLIMAT_TOKEN}|g" /etc/nginx/conf.d/default.conf
 
 # Copier les fichiers buildés depuis l'étape 1
 COPY --from=build /app/dist /usr/share/nginx/html
@@ -40,5 +40,5 @@ COPY --from=build /app/dist /usr/share/nginx/html
 # Exposer le port HTTP
 EXPOSE 80
 
-# Démarrer avec l'entrypoint qui injecte le token puis lance nginx
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Démarrer Nginx (pas besoin d'entrypoint custom)
+CMD ["nginx", "-g", "daemon off;"]
