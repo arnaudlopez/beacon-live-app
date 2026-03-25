@@ -1,0 +1,65 @@
+version: "3.8"
+
+services:
+  beacon-live:
+    # --------------------------------------------------------
+    # CONFIGURATION BUILD
+    # --------------------------------------------------------
+    build:
+      context: .
+      args:
+        # Dans Portainer, définissez ces variables dans l'onglet "Env"
+        - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
+        - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_INFOCLIMAT_TOKEN=${VITE_INFOCLIMAT_TOKEN}
+    container_name: beacon-live
+    restart: unless-stopped
+    
+    # --------------------------------------------------------
+    # RÉSEAU & EXPOSITION PORT
+    # --------------------------------------------------------
+    ports:
+      - "9888:80"
+    networks:
+      - beacon-secure-net
+
+    # --------------------------------------------------------
+    # SÉCURITÉ MAXIMUM (Hardening)
+    # --------------------------------------------------------
+    # 1. Système de fichiers en lecture seule (Immunité contre les webshells)
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+      
+    # 2. Prévention de l'escalade de privilèges
+    security_opt:
+      - no-new-privileges:true
+      
+    # 3. Restriction des capabilities Kernel
+    cap_drop:
+      - ALL # On retire tout
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+      - NET_BIND_SERVICE # Requis pour binder le port 80 en conteneur
+
+    # --------------------------------------------------------
+    # LIMITES DE RESSOURCES
+    # --------------------------------------------------------
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          cpus: '0.10'
+          memory: 64M
+
+networks:
+  beacon-secure-net:
+    driver: bridge
+    internal: false
