@@ -3,7 +3,7 @@ import { Wind, Thermometer, Droplets, Compass, Activity, Bell, BellOff } from 'l
 import { format } from 'date-fns';
 import HistoricalChart from './HistoricalChart';
 import { useWeatherData } from '../hooks/useWeatherData';
-import { useInfoclimat } from '../hooks/useInfoclimat';
+
 import { useNotifications } from '../hooks/useNotifications';
 import { SOURCES } from '../config/sources';
 import { getBeaufort, degToCardinal } from '../utils/beaufort';
