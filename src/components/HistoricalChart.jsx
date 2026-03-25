@@ -119,7 +119,7 @@ export default function HistoricalChart({ data }) {
 
       {/* Wind Speed & Temperature Chart */}
       <ResponsiveContainer width="100%" height={hasDirection ? '55%' : '100%'}>
-        <ComposedChart data={filteredData} margin={{ top: 10, right: -10, left: -20, bottom: 0 }}>
+        <ComposedChart data={filteredData} margin={{ top: 10, right: 5, left: 5, bottom: 0 }}>
           <defs>
             <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#00e5ff" stopOpacity={0.45}/>
@@ -143,7 +143,7 @@ export default function HistoricalChart({ data }) {
             yAxisId="left"
             stroke="#b39ddb" 
             fontSize={12} 
-            tickFormatter={(val) => `${val}°`}
+            tickFormatter={(val) => `${Math.round(val)}°`}
             domain={['auto', 'auto']}
             opacity={0.5}
           />
