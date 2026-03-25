@@ -48,13 +48,16 @@ async function fetchPP(sid: string) {
   const m = j.data?.measurements;
   if (!m) return null;
   let h: unknown[] = [];
-  const hr = await fetch(`https://api.pioupiou.fr/v1/archive/${sid}`);
+  const stop = new Date().toISOString();
+  const start = new Date(Date.now() - 48 * 3600000).toISOString();
+  const hr = await fetch(`https://api.pioupiou.fr/v1/archive/${sid}?start=${start}&stop=${stop}`);
   if (hr.ok) {
     const hj = await hr.json();
-    h = (hj.data || []).map((i: number[]) => ({
+    h = (hj.data || []).map((i: unknown[]) => ({
       time: i[0],
-      avgSpeed: i[4] !== null ? Number((i[4] / 1.852).toFixed(1)) : 0,
-      maxGust: i[5] !== null ? Number((i[5] / 1.852).toFixed(1)) : 0
+      avgSpeed: i[4] !== null ? Number((Number(i[4]) / 1.852).toFixed(1)) : 0,
+      maxGust: i[5] !== null ? Number((Number(i[5]) / 1.852).toFixed(1)) : 0,
+      windDirection: i[6] !== null ? Number(i[6]) : null
     }));
   }
   return {
@@ -161,61 +164,82 @@ async function fetchWindsUp(sid: string) {
     if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
     
     const c = `PHPSESSID=${sidMatch[1]}`;
-    const r = await fetch(`https://www.winds-up.com/spot-${sid}-observations-releves-vent.html`, {
-      headers: { "Cookie": c }
-    });
-    
-    const html = await r.text();
+    const baseUrl = `https://www.winds-up.com/spot-${sid}-observations-releves-vent.html`;
 
-    // --- Step 1: Parse the HTML table for precise degrees ---
-    // Each row: "Aujourd'hui - HH:MM" ... "NNO   337°" ... avg ... min ... max
-    const tableDegMap = new Map<string, number>(); // "HH:MM" → precise degree
-    const tableRowRegex = /hui - (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})°/g;
-    let tableMatch;
-    while ((tableMatch = tableRowRegex.exec(html)) !== null) {
-      const timeKey = tableMatch[1]; // "12:33"
-      const deg = parseInt(tableMatch[2]); // 337
-      if (!tableDegMap.has(timeKey)) {
-        tableDegMap.set(timeKey, deg);
+    // Fetch today + yesterday for 48h coverage
+    const yesterday = new Date(Date.now() - 24 * 3600000);
+    const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
+    
+    const [rToday, rYesterday] = await Promise.all([
+      fetch(baseUrl, { headers: { "Cookie": c } }),
+      fetch(`${baseUrl}?jour=${yStr}`, { headers: { "Cookie": c } })
+    ]);
+    
+    const htmlToday = await rToday.text();
+    const htmlYesterday = await rYesterday.text();
+
+    function parseWindsUpPage(html: string) {
+      // Step 1: Parse the HTML table for precise degrees
+      const tableDegMap = new Map<string, number>();
+      const tableRowRegex = /- (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})°/g;
+      let tableMatch;
+      while ((tableMatch = tableRowRegex.exec(html)) !== null) {
+        const timeKey = tableMatch[1];
+        const deg = parseInt(tableMatch[2]);
+        if (!tableDegMap.has(timeKey)) {
+          tableDegMap.set(timeKey, deg);
+        }
+      }
+
+      // Step 2: Parse Highcharts data for speed/gust/timestamps
+      const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
+      const points: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
+      let match;
+      while ((match = chartRegex.exec(html)) !== null) {
+        if (match[0].includes('abo:"no"')) continue;
+        
+        const fakeTs = parseInt(match[1]);
+        const tzOffset = getParisOffsetMs(fakeTs);
+        const realTs = fakeTs - tzOffset;
+        
+        const avg = parseFloat(match[2]);
+        const min = parseFloat(match[3]);
+        const max = match[4] ? parseFloat(match[4]) : avg;
+
+        const localDate = new Date(fakeTs);
+        const hh = String(localDate.getUTCHours()).padStart(2, '0');
+        const mm = String(localDate.getUTCMinutes()).padStart(2, '0');
+        const minuteKey = `${hh}:${mm}`;
+        
+        const dir = tableDegMap.get(minuteKey) ?? null;
+        
+        points.push({
+          time: realTs,
+          avgSpeed: Number(avg.toFixed(1)),
+          maxGust: Number(max.toFixed(1)),
+          temperature: null,
+          windDirection: dir
+        });
+      }
+      return points;
+    }
+
+    const yesterdayPoints = parseWindsUpPage(htmlYesterday);
+    const todayPoints = parseWindsUpPage(htmlToday);
+    
+    // Merge: yesterday first, then today. Deduplicate by timestamp.
+    const seen = new Set<number>();
+    const history = [];
+    for (const p of [...yesterdayPoints, ...todayPoints]) {
+      if (!seen.has(p.time)) {
+        seen.add(p.time);
+        history.push(p);
       }
     }
-
-    // --- Step 2: Parse Highcharts data for speed/gust/timestamps ---
-    const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
-    
-    const history = [];
-    let match;
-    while ((match = chartRegex.exec(html)) !== null) {
-      if (match[0].includes('abo:"no"')) continue; // Skip faked premium data
-      
-      const fakeTs = parseInt(match[1]);
-      const tzOffset = getParisOffsetMs(fakeTs);
-      const realTs = fakeTs - tzOffset; // Strip the fake timezone shift so it's true UTC
-      
-      const avg = parseFloat(match[2]);
-      const min = parseFloat(match[3]);
-      const max = match[4] ? parseFloat(match[4]) : avg;
-
-      // Build the "HH:MM" key from the *fake* (local) timestamp, matching the table
-      const localDate = new Date(fakeTs);
-      const hh = String(localDate.getUTCHours()).padStart(2, '0');
-      const mm = String(localDate.getUTCMinutes()).padStart(2, '0');
-      const minuteKey = `${hh}:${mm}`;
-      
-      // Lookup precise degree from table, fallback to null
-      const dir = tableDegMap.get(minuteKey) ?? null;
-      
-      history.push({
-        time: realTs,
-        avgSpeed: Number(avg.toFixed(1)),
-        maxGust: Number(max.toFixed(1)),
-        temperature: null,
-        windDirection: dir
-      });
-    }
+    history.sort((a, b) => a.time - b.time);
     
     if (history.length === 0) return null;
-    const live = history[history.length - 1]; // sorted chronologically
+    const live = history[history.length - 1];
     
     return {
       live: {
