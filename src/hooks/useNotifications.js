@@ -26,6 +26,7 @@ function saveSettings(settings) {
 export function useNotifications(allWindData) {
   const [settings, setSettings] = useState(loadSettings);
   const lastNotificationTimes = useRef({});
+  const previousGusts = useRef({});
 
   // Persist whenever settings change
   useEffect(() => {
@@ -54,13 +55,19 @@ export function useNotifications(allWindData) {
         }));
 
         const msg = `Alertes activées pour ${sourceName} — seuil ${current.threshold} kts.`;
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.ready.then(reg => {
-            reg.showNotification('Alertes Activées 🌬️', { body: msg, icon: '/favicon.svg' });
-          }).catch(() => new window.Notification('Alertes Activées 🌬️', { body: msg }));
-        } else {
-          new window.Notification('Alertes Activées 🌬️', { body: msg });
-        }
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(reg => {
+              if (reg && reg.active) {
+                reg.showNotification('Alertes Activées 🌬️', { body: msg, icon: '/favicon.svg' });
+              } else {
+                new window.Notification('Alertes Activées 🌬️', { body: msg });
+              }
+            }).catch(() => new window.Notification('Alertes Activées 🌬️', { body: msg }));
+          } else {
+            new window.Notification('Alertes Activées 🌬️', { body: msg });
+          }
+        } catch(e) { /* ignore */ }
       } else {
         alert('Veuillez autoriser les notifications dans les paramètres de votre navigateur.');
       }
@@ -86,10 +93,18 @@ export function useNotifications(allWindData) {
       if (!windInfo || !windInfo.live) return;
 
       const gust = parseFloat(windInfo.live.windGust);
+      const prevGust = previousGusts.current[source.id];
+      previousGusts.current[source.id] = gust;
+
       if (isNaN(gust) || gust < s.threshold) return;
 
+      const justCrossed = prevGust === undefined || prevGust < s.threshold;
       const lastTime = lastNotificationTimes.current[source.id] || 0;
-      if (now - lastTime < NOTIF_COOLDOWN) return;
+      const cooldownExpired = (now - lastTime) >= NOTIF_COOLDOWN;
+
+      // Only trigger if it JUST crossed the threshold (e.g. going from 14 to 15+)
+      // Or if it steadily stayed above the threshold for longer than the Cooldown (1 hr)
+      if (!justCrossed && !cooldownExpired) return;
 
       const title = `⚠️ Alerte ${source.name}`;
       const options = {
@@ -98,13 +113,20 @@ export function useNotifications(allWindData) {
         tag: `alert-${source.id}`
       };
 
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.ready.then(reg => {
-          reg.showNotification(title, options);
-        }).catch(() => new window.Notification(title, options));
-      } else {
-        new window.Notification(title, options);
-      }
+      try {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistration().then(reg => {
+            if (reg && reg.active) {
+              reg.showNotification(title, options);
+            } else {
+              new window.Notification(title, options);
+            }
+          }).catch(() => new window.Notification(title, options));
+        } else {
+          new window.Notification(title, options);
+        }
+      } catch(e) { /* fallback */ }
+      
       lastNotificationTimes.current[source.id] = now;
     });
   }, [allWindData, settings]);
