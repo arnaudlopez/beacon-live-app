@@ -166,17 +166,26 @@ async function fetchWindsUp(sid: string) {
     });
     
     const html = await r.text();
-    // Use img attribute to extract direction since 'o' can be empty
-    const regex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*img:"[^"]*-([A-Za-z]+)\.gif"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
-    
-    const degMap: Record<string, number> = {
-      "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, 
-      "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337
-    };
+
+    // --- Step 1: Parse the HTML table for precise degrees ---
+    // Each row: "Aujourd'hui - HH:MM" ... "NNO   337°" ... avg ... min ... max
+    const tableDegMap = new Map<string, number>(); // "HH:MM" → precise degree
+    const tableRowRegex = /hui - (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})°/g;
+    let tableMatch;
+    while ((tableMatch = tableRowRegex.exec(html)) !== null) {
+      const timeKey = tableMatch[1]; // "12:33"
+      const deg = parseInt(tableMatch[2]); // 337
+      if (!tableDegMap.has(timeKey)) {
+        tableDegMap.set(timeKey, deg);
+      }
+    }
+
+    // --- Step 2: Parse Highcharts data for speed/gust/timestamps ---
+    const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
     
     const history = [];
     let match;
-    while ((match = regex.exec(html)) !== null) {
+    while ((match = chartRegex.exec(html)) !== null) {
       if (match[0].includes('abo:"no"')) continue; // Skip faked premium data
       
       const fakeTs = parseInt(match[1]);
@@ -184,10 +193,17 @@ async function fetchWindsUp(sid: string) {
       const realTs = fakeTs - tzOffset; // Strip the fake timezone shift so it's true UTC
       
       const avg = parseFloat(match[2]);
-      const dirStr = match[3];
-      const min = parseFloat(match[4]);
-      const max = match[5] ? parseFloat(match[5]) : avg;
-      const dir = degMap[dirStr.toUpperCase()] !== undefined ? degMap[dirStr.toUpperCase()] : null;
+      const min = parseFloat(match[3]);
+      const max = match[4] ? parseFloat(match[4]) : avg;
+
+      // Build the "HH:MM" key from the *fake* (local) timestamp, matching the table
+      const localDate = new Date(fakeTs);
+      const hh = String(localDate.getUTCHours()).padStart(2, '0');
+      const mm = String(localDate.getUTCMinutes()).padStart(2, '0');
+      const minuteKey = `${hh}:${mm}`;
+      
+      // Lookup precise degree from table, fallback to null
+      const dir = tableDegMap.get(minuteKey) ?? null;
       
       history.push({
         time: realTs,
