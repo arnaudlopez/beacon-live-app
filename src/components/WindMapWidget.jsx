@@ -70,7 +70,7 @@ function WindMarker({ source, coords, active, onClick, history }) {
             <span class="stale-dot ${dotClass}" style="background: ${badgeColor};"></span>
             ${ageLabel}
           </div>
-          ${active ? '<div class="wind-active-tag">● Actif</div>' : '<div class="wind-tap-hint">Tap pour voir</div>'}
+          ${active ? '<div class="wind-active-tag">● Actif</div>' : ''}
         </div>
       </div>
     `,
