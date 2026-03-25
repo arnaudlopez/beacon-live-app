@@ -6,6 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
+const INFOCLIMAT_TOKEN = Deno.env.get("INFOCLIMAT_TOKEN")||"";
 
 const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -278,6 +279,54 @@ async function fetchWindsUp(sid: string) {
   }
 }
 
+async function fetchInfo() {
+  if (!INFOCLIMAT_TOKEN) return null;
+  const sid = 'STATIC0317';
+  try {
+    const end = new Date();
+    const start = new Date(end.getTime() - 24 * 3600000);
+    const fStart = start.toISOString().split('T')[0];
+    const fEnd = end.toISOString().split('T')[0];
+    const url = `https://www.infoclimat.fr/opendata/?version=2&method=get&format=json&stations[]=${sid}&start=${fStart}&end=${fEnd}&token=${INFOCLIMAT_TOKEN}`;
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const json = await r.json();
+    const hourly = json.hourly?.[sid] || [];
+    if (hourly.length === 0) return null;
+
+    const historyRev = [...hourly].reverse();
+    const latest = historyRev.find((h: any) => h.vent_moyen !== null) || historyRev[0];
+
+    const history = hourly.map((h: any) => {
+      const speedKmh = parseFloat(h.vent_moyen || 0);
+      const gustKmh = parseFloat(h.vent_rafales_10min || h.vent_rafales || 0);
+      return {
+        time: h.dh_utc.replace(' ', 'T') + 'Z',
+        avgSpeed: Number((speedKmh / 1.852).toFixed(1)),
+        maxGust: Number((gustKmh / 1.852).toFixed(1)),
+        temperature: h.temperature ? Number(h.temperature) : null,
+        windDirection: h.vent_direction ? parseInt(h.vent_direction, 10) : null
+      };
+    }).filter((item: any) => item.time);
+
+    const liveSpeedKmh = parseFloat(latest.vent_moyen || 0);
+    const liveGustKmh = parseFloat(latest.vent_rafales_10min || latest.vent_rafales || 0);
+
+    return {
+      live: {
+        windSpeed: (liveSpeedKmh / 1.852).toFixed(1),
+        windGust: (liveGustKmh / 1.852).toFixed(1),
+        windDirection: latest.vent_direction ? parseInt(latest.vent_direction, 10) : null,
+        temperature: latest.temperature ? Number(latest.temperature) : null
+      },
+      history: history
+    };
+  } catch (e) {
+    console.error("InfoClimat err:", e);
+    return null;
+  }
+}
+
 type F = () => Promise<unknown>;
 
 const SF: Record<string, F> = {
@@ -287,7 +336,8 @@ const SF: Record<string, F> = {
   candhis_revellata: () => fetchCD("Y2FtcD0wMkIwNA=="),
   candhis_bonifacio: () => fetchCD("Y2FtcD0wMkEwMQ=="),
   esurfmar_ajaccio: () => fetchES(),
-  windsup_porticcio: () => fetchWindsUp("porticcio--windsurf-kitesurf-1726")
+  windsup_porticcio: () => fetchWindsUp("porticcio--windsurf-kitesurf-1726"),
+  infoclimat_000V0: () => fetchInfo()
 };
 
 Deno.serve(async (req: Request) => {

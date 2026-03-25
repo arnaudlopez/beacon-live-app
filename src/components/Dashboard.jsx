@@ -89,17 +89,8 @@ export default function Dashboard() {
     return SOURCES.find(s => s.id === savedId) || SOURCES[0];
   });
 
-  // Single unified hook for Supabase data
-  const { windData: baseWindData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
-  
-  // Infoclimat proxy fetch
-  const infoData = useInfoclimat();
-
-  // Merge Infoclimat with Supabase Edge Function data
-  const windData = useMemo(() => {
-    if (!infoData) return baseWindData;
-    return { ...baseWindData, coti_chiavari: infoData };
-  }, [baseWindData, infoData]);
+  // Single unified hook for Supabase data (now includes Infoclimat/Coti Chiavari)
+  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
 
   const notifications = useNotifications(windData);
 
