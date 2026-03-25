@@ -23,7 +23,13 @@ const CustomTooltip = ({ active, payload, label }) => {
         <p style={{ color: 'var(--text-secondary)', marginBottom: '0.5rem', fontSize: '0.85rem' }}>
           {format(time, 'MMM dd, HH:mm')}
         </p>
-        {payload.map((entry, index) => {
+        {payload
+          .filter((entry, index, self) => 
+            entry.dataKey !== 'time' && 
+            entry.name !== 'time' &&
+            index === self.findIndex((t) => t.dataKey === entry.dataKey)
+          )
+          .map((entry, index) => {
           let unit = 'kts';
           if (entry.dataKey === 'waterTemp' || entry.dataKey === 'temperature') unit = '°C';
           if (entry.dataKey === 'windDirection') unit = '°';
