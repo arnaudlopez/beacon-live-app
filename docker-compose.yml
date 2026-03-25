@@ -29,6 +29,7 @@ services:
       - /var/cache/nginx
       - /var/run
       - /tmp
+      - /etc/nginx/conf.d
 
     security_opt:
       - no-new-privileges:true
