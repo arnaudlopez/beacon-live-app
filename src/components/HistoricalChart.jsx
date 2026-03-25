@@ -63,8 +63,8 @@ export default function HistoricalChart({ data }) {
   const [timeWindow, setTimeWindow] = useState(() => {
     try {
       const saved = localStorage.getItem(TIME_WINDOW_KEY);
-      return saved ? JSON.parse(saved) : 12;
-    } catch { return 12; }
+      return saved ? JSON.parse(saved) : 6;
+    } catch { return 6; }
   });
 
   useEffect(() => {
@@ -85,6 +85,7 @@ export default function HistoricalChart({ data }) {
   };
 
   const timeOptions = [
+    { label: '6h', hours: 6 },
     { label: '12h', hours: 12 },
     { label: '24h', hours: 24 },
     { label: '48h', hours: 48 }
