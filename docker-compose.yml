@@ -18,9 +18,9 @@ services:
     # --------------------------------------------------------
     # RÉSEAU & EXPOSITION PORT
     # --------------------------------------------------------
-    # Nous laissons le port 9888 exposé pour un accès local facile depuis le réseau Wi-Fi
+    # Option 1: Exposition directe sur le port 9888 (Pour NPM ou accès local pur)
     ports:
-       - "9888:80"
+      - "9888:80"
 
     # Option 2: Exposition via TRAEFIK (Reverse Proxy Automatique)
     labels:
