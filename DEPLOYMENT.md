@@ -13,40 +13,19 @@ Puisque le domaine a été acheté sur Namecheap, la configuration nécessite de
 
 ### Étape A : DNS Namecheap
 Dans le tableau de bord Namecheap (Advanced DNS), supprimez les enregistrements de parking par défaut et ajoutez :
-### Étape B : Nginx Proxy Manager (Portainer)
-Pour sécuriser `ajaccio.surf` avec un certificat SSL Let's Encrypt (obligatoire pour installer une PWA sur iOS/Android), la méthode la plus fiable sous Portainer est de déployer **Nginx Proxy Manager** (NPM). 
+### Étape B : Sécurisation HTTPS via votre Reverse Proxy (Traefik)
+Puisque votre serveur NAS possède **déjà un proxy Traefik** configuré (qui occupe les ports 80/443/81), il n'est pas nécessaire d'installer un autre routeur.
 
-> **Important** : Si votre serveur tourne sous Synology DSM ou Unraid, les ports 80 et 443 sont souvent déjà utilisés par le système. Il faut donc déployer NPM sur des ports alternatifs (ex: 8080 et 4443) et faire une redirection depuis votre routeur/box internet (`Port 443 WAN` -> `Port 4443 NAS`).
+Vous avez juste à dire à votre Traefik d'adopter le conteneur `beacon-live`.
 
-Si NPM n'est pas encore installé sur votre serveur, voici la Stack à déployer **séparément** dans Portainer :
-
-```yaml
-version: '3.8'
-services:
-  npm:
-    image: 'jc21/nginx-proxy-manager:latest'
-    restart: unless-stopped
-    ports:
-      - '8080:80'    # Port HTTP alternatif pour éviter les conflits
-      - '4443:443'   # Port HTTPS alternatif pour éviter les conflits
-      - '81:81'      # Panel d'administration
-    volumes:
-      - ./data:/data
-      - ./letsencrypt:/etc/letsencrypt
-```
-
-**Une fois Nginx Proxy Manager installé :**
-1. Accédez au panel admin de NPM (`http://<YOUR_SERVER_IP>:81`). Logs par défaut : `admin@example.com` / `changeme`.
-2. Allez dans **Hosts > Proxy Hosts** et cliquez sur **Add Proxy Host**.
-3. **Domain Names** : `ajaccio.surf`, `www.ajaccio.surf`
-4. **Scheme** : `http`
-5. **Forward Hostname / IP** : `<YOUR_SERVER_IP>`
-6. **Forward Port** : `9888` (Le port externe de l'application beacon-live)
-7. Allez dans l'onglet **SSL** :
-   - SSL Certificate : **Request a new SSL Certificate**
-   - Cochez **Force SSL**
-   - Renseignez votre adresse email et acceptez les ToS Let's Encrypt.
-8. Cliquez sur **Save**.
+**Pour activer Traefik sur Beacon Live :**
+1. Ouvrez l'onglet **Editor** de votre stack `beacon-live` dans Portainer.
+2. Dans la section `beacon-live:`, trouvez le bloc `# Option 2: Exposition via TRAEFIK` et **décommentez toutes les lignes sous `labels:`**.
+3. Assurez-vous d'ajuster le nom du resolver de certificat (la ligne `tls.certresolver=`) en fonction du nom que vous utilisez dans Traefik (ex: `le`, `letsencrypt`, `myresolver`).
+4. À la fin du bloc `beacon-live:`, **décommentez la ligne `- traefik_network`**.
+5. Tout en bas du fichier, dans le bloc global `networks:`, **décommentez le bloc `traefik_network:`** en remplaçant ce nom par le vrai nom du réseau Docker utilisé par votre instance Traefik (souvent `proxy`, `traefik_web` ou `web`).
+6. Si vous utilisez Traefik, vous pouvez **commenter le bloc `ports:`** (9888:80) car l'application n'aura plus besoin d'être exposée publiquement.
+7. Cliquez sur **Update the stack**.
 
 🎉 **Terminé !** 
-Assurez-vous que votre routeur / Box internet redirige bien le trafic entrant WAN (port 443) vers l'IP de votre serveur sur le port alternatif (4443 dans cet exemple). L'application sera alors accessible mondialement et sécurisée sur `https://ajaccio.surf`.
+Dès que Traefik va repérer les nouveaux labels Docker, il demandera automatiquement un certificat HTTPS à Let's Encrypt et redirigera `https://ajaccio.surf` vers votre application de manière invisible et hyper-sécurisée.
