@@ -74,7 +74,7 @@ networks:
     driver: bridge
     internal: false
     
-  # Si votre réseau s'appelle autrement que "traefik", remplacez-le ici
+  # Le réseau s'appelle "sabnzbd_default" sur ton NAS !
   traefik_network:
     external: true
-    name: traefik
+    name: sabnzbd_default
