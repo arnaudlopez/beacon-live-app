@@ -18,6 +18,7 @@ const WIND_SOURCE_MAP = {
   'lfkj': 'meteofrance_20004002',
   'la_parata': 'meteofrance_20004003',
   'owm-1202': 'pioupiou_1202',
+  'porticcio': 'windsup_porticcio',
 };
 
 export function useWeatherData() {
