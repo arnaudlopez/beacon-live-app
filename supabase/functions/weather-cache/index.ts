@@ -172,16 +172,22 @@ async function fetchWindsUp(sid: string) {
     
     const [rToday, rYesterday] = await Promise.all([
       fetch(baseUrl, { headers: { "Cookie": c } }),
-      fetch(`${baseUrl}?jour=${yStr}`, { headers: { "Cookie": c } })
+      fetch(`${baseUrl}?date=${yStr}`, { headers: { "Cookie": c } })
     ]);
     
     const htmlToday = await rToday.text();
     const htmlYesterday = await rYesterday.text();
 
+    // Cardinal direction → degree mapping (used for `o` field from Highcharts)
+    const degMap: Record<string, number> = {
+      "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, 
+      "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337
+    };
+
     function parseWindsUpPage(html: string) {
-      // Step 1: Parse the HTML table for precise degrees
+      // Step 1: Parse the HTML table for precise degrees (only works for today's page)
       const tableDegMap = new Map<string, number>();
-      const tableRowRegex = /- (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})°/g;
+      const tableRowRegex = /- (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})\u00b0/g;
       let tableMatch;
       while ((tableMatch = tableRowRegex.exec(html)) !== null) {
         const timeKey = tableMatch[1];
@@ -191,8 +197,8 @@ async function fetchWindsUp(sid: string) {
         }
       }
 
-      // Step 2: Parse Highcharts data for speed/gust/timestamps
-      const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
+      // Step 2: Parse Highcharts data — now also extract o:"..." for cardinal direction
+      const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*o:"([^"]*)"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
       const points: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
       let match;
       while ((match = chartRegex.exec(html)) !== null) {
@@ -203,15 +209,24 @@ async function fetchWindsUp(sid: string) {
         const realTs = fakeTs - tzOffset;
         
         const avg = parseFloat(match[2]);
-        const min = parseFloat(match[3]);
-        const max = match[4] ? parseFloat(match[4]) : avg;
+        const oField = match[3]; // cardinal direction from authenticated data e.g. "N", "NO", "NNO"
+        const min = parseFloat(match[4]);
+        const max = match[5] ? parseFloat(match[5]) : avg;
 
+        // Build HH:MM key for table lookup
         const localDate = new Date(fakeTs);
         const hh = String(localDate.getUTCHours()).padStart(2, '0');
         const mm = String(localDate.getUTCMinutes()).padStart(2, '0');
         const minuteKey = `${hh}:${mm}`;
         
-        const dir = tableDegMap.get(minuteKey) ?? null;
+        // Priority: table precise degree > o field cardinal > null
+        let dir: number | null = null;
+        const tableDeg = tableDegMap.get(minuteKey);
+        if (tableDeg !== undefined) {
+          dir = tableDeg; // Precise degree from table (e.g. 337)
+        } else if (oField && degMap[oField] !== undefined) {
+          dir = degMap[oField]; // Cardinal from chart (e.g. "NNO" → 337)
+        }
         
         points.push({
           time: realTs,
