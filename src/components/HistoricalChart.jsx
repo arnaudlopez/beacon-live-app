@@ -141,22 +141,22 @@ export default function HistoricalChart({ data }) {
           />
           <YAxis 
             yAxisId="left"
-            stroke="var(--text-secondary)" 
-            fontSize={12} 
-            tickFormatter={(val) => Math.round(val)}
-          />
-          <YAxis 
-            yAxisId="right"
-            orientation="right"
             stroke="#b39ddb" 
             fontSize={12} 
             tickFormatter={(val) => `${val}°`}
             domain={['auto', 'auto']}
             opacity={0.5}
           />
+          <YAxis 
+            yAxisId="right"
+            orientation="right"
+            stroke="var(--text-secondary)" 
+            fontSize={12} 
+            tickFormatter={(val) => Math.round(val)}
+          />
           <Tooltip content={<CustomTooltip />} />
           <Area 
-            yAxisId="left"
+            yAxisId="right"
             type="monotone" 
             dataKey="maxGust" 
             name="Rafale max" 
@@ -166,7 +166,7 @@ export default function HistoricalChart({ data }) {
             strokeWidth={2.5}
           />
           <Area 
-            yAxisId="left"
+            yAxisId="right"
             type="monotone" 
             dataKey="avgSpeed" 
             name="Vent moyen" 
@@ -176,7 +176,7 @@ export default function HistoricalChart({ data }) {
             strokeWidth={2.5}
           />
           <Line
-            yAxisId="right"
+            yAxisId="left"
             type="monotone"
             dataKey="temperature"
             name="Temp. air"
@@ -188,7 +188,7 @@ export default function HistoricalChart({ data }) {
             strokeOpacity={0.6}
           />
           <Line
-            yAxisId="right"
+            yAxisId="left"
             type="monotone"
             dataKey="waterTemp"
             name="Temp. eau"
