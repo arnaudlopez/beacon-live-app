@@ -178,7 +178,7 @@ export default function Dashboard() {
       </nav>
 
       <div className="alert-bar glass-panel" role="region" aria-label="Paramètres d'alerte">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
           <label htmlFor="alert-threshold" style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>🔔 Alerte :</label>
           <input
             id="alert-threshold"
@@ -190,19 +190,39 @@ export default function Dashboard() {
             min={1} max={100}
           />
           <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>kts</span>
+          <div style={{ display: 'flex', gap: '2px', marginLeft: '0.3rem' }}>
+            {[
+              { mode: 'avg', label: 'Moy' },
+              { mode: 'gust', label: 'Raf' },
+              { mode: 'both', label: 'Les 2' }
+            ].map(({ mode, label }) => (
+              <button
+                key={mode}
+                className={`source-toggle-btn ${(currentAlertSettings.alertMode || 'gust') === mode ? 'active' : ''}`}
+                style={{ fontSize: '0.75rem', padding: '0.3rem 0.5rem', minWidth: 'unset' }}
+                onClick={() => notifications.setAlertMode(activeSource.id, mode)}
+                disabled={currentAlertSettings.enabled}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           {SOURCES.filter(s => notifications.settings[s.id]?.enabled).map(s => {
             const wind = windData[s.id];
             const gust = wind?.live ? parseFloat(wind.live.windGust) : 0;
+            const avg = wind?.live ? parseFloat(wind.live.windSpeed) : 0;
             const threshold = notifications.settings[s.id].threshold;
-            const isOver = gust >= threshold;
+            const mode = notifications.settings[s.id].alertMode || 'gust';
+            const isOver = (mode === 'gust' || mode === 'both') ? gust >= threshold : false;
+            const isOverAvg = (mode === 'avg' || mode === 'both') ? avg >= threshold : false;
             const isCurrent = s.id === activeSource.id;
             return (
               <span
                 key={s.id}
-                className={`alert-spot-indicator ${isOver ? 'alert-spot-over' : ''} ${isCurrent ? 'alert-spot-current' : ''}`}
-                title={`${s.name}: ${gust} kts (seuil: ${threshold})`}
+                className={`alert-spot-indicator ${(isOver || isOverAvg) ? 'alert-spot-over' : ''} ${isCurrent ? 'alert-spot-current' : ''}`}
+                title={`${s.name}: moy ${avg} / raf ${gust} kts (seuil: ${threshold}, mode: ${mode})`}
                 onClick={() => setActiveSource(SOURCES.find(src => src.id === s.id))}
                 role="button"
                 tabIndex={0}

@@ -6,10 +6,17 @@ const STORAGE_KEY = 'beacon_notification_settings';
 function loadSettings() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Migration: add alertMode if missing from older settings
+      Object.keys(parsed).forEach(id => {
+        if (!parsed[id].alertMode) parsed[id].alertMode = 'gust';
+      });
+      return parsed;
+    }
   } catch { /* ignore */ }
   const initial = {};
-  SOURCES.forEach(s => { initial[s.id] = { enabled: false, threshold: DEFAULT_NOTIFICATION_THRESHOLD }; });
+  SOURCES.forEach(s => { initial[s.id] = { enabled: false, threshold: DEFAULT_NOTIFICATION_THRESHOLD, alertMode: 'gust' }; });
   return initial;
 }
 
@@ -19,16 +26,31 @@ function saveSettings(settings) {
   } catch { /* ignore */ }
 }
 
+function sendNotification(title, options) {
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistration().then(reg => {
+        if (reg && reg.active) {
+          reg.showNotification(title, options);
+        } else {
+          new window.Notification(title, options);
+        }
+      }).catch(() => new window.Notification(title, options));
+    } else {
+      new window.Notification(title, options);
+    }
+  } catch(e) { /* fallback */ }
+}
+
 /**
  * Manages per-spot notification settings, permissions, and alert dispatching.
- * Settings are persisted in localStorage.
+ * alertMode: 'gust' | 'avg' | 'both'
  */
 export function useNotifications(allWindData) {
   const [settings, setSettings] = useState(loadSettings);
   const lastNotificationTimes = useRef({});
-  const previousGusts = useRef({});
+  const previousValues = useRef({});
 
-  // Persist whenever settings change
   useEffect(() => {
     saveSettings(settings);
   }, [settings]);
@@ -37,6 +59,13 @@ export function useNotifications(allWindData) {
     setSettings(prev => ({
       ...prev,
       [sourceId]: { ...prev[sourceId], threshold: Number(value) }
+    }));
+  }, []);
+
+  const setAlertMode = useCallback((sourceId, mode) => {
+    setSettings(prev => ({
+      ...prev,
+      [sourceId]: { ...prev[sourceId], alertMode: mode }
     }));
   }, []);
 
@@ -54,20 +83,9 @@ export function useNotifications(allWindData) {
           [sourceId]: { ...prev[sourceId], enabled: true }
         }));
 
-        const msg = `Alertes activées pour ${sourceName} — seuil ${current.threshold} kts.`;
-        try {
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistration().then(reg => {
-              if (reg && reg.active) {
-                reg.showNotification('Alertes Activées 🌬️', { body: msg, icon: '/favicon.svg' });
-              } else {
-                new window.Notification('Alertes Activées 🌬️', { body: msg });
-              }
-            }).catch(() => new window.Notification('Alertes Activées 🌬️', { body: msg }));
-          } else {
-            new window.Notification('Alertes Activées 🌬️', { body: msg });
-          }
-        } catch(e) { /* ignore */ }
+        const modeLabel = { gust: 'rafales', avg: 'vent moyen', both: 'moy. + rafales' }[current.alertMode || 'gust'];
+        const msg = `Alertes activées pour ${sourceName} — seuil ${current.threshold} kts (${modeLabel}).`;
+        sendNotification('Alertes Activées 🌬️', { body: msg, icon: '/favicon.svg' });
       } else {
         alert('Veuillez autoriser les notifications dans les paramètres de votre navigateur.');
       }
@@ -93,43 +111,51 @@ export function useNotifications(allWindData) {
       if (!windInfo || !windInfo.live) return;
 
       const gust = parseFloat(windInfo.live.windGust);
-      const prevGust = previousGusts.current[source.id];
-      previousGusts.current[source.id] = gust;
+      const avg = parseFloat(windInfo.live.windSpeed);
+      const mode = s.alertMode || 'gust';
+      const prevKey = source.id;
+      const prev = previousValues.current[prevKey] || {};
 
-      if (isNaN(gust) || gust < s.threshold) return;
+      // Update previous values
+      previousValues.current[prevKey] = { gust, avg };
 
-      const justCrossed = prevGust === undefined || prevGust < s.threshold;
+      // Check which metrics should be evaluated based on alertMode
+      const checks = [];
+      if (mode === 'gust' || mode === 'both') {
+        if (!isNaN(gust) && gust >= s.threshold) {
+          const justCrossed = prev.gust === undefined || prev.gust < s.threshold;
+          checks.push({ type: 'rafale', value: gust, justCrossed });
+        }
+      }
+      if (mode === 'avg' || mode === 'both') {
+        if (!isNaN(avg) && avg >= s.threshold) {
+          const justCrossed = prev.avg === undefined || prev.avg < s.threshold;
+          checks.push({ type: 'vent moyen', value: avg, justCrossed });
+        }
+      }
+
+      if (checks.length === 0) return;
+
+      // Check if any metric just crossed OR cooldown expired
+      const anyJustCrossed = checks.some(c => c.justCrossed);
       const lastTime = lastNotificationTimes.current[source.id] || 0;
       const cooldownExpired = (now - lastTime) >= NOTIF_COOLDOWN;
 
-      // Only trigger if it JUST crossed the threshold (e.g. going from 14 to 15+)
-      // Or if it steadily stayed above the threshold for longer than the Cooldown (1 hr)
-      if (!justCrossed && !cooldownExpired) return;
+      if (!anyJustCrossed && !cooldownExpired) return;
 
+      // Build notification message
+      const triggered = checks.map(c => `${c.type}: ${c.value} kts`).join(' · ');
       const title = `⚠️ Alerte ${source.name}`;
       const options = {
-        body: `Rafale à ${windInfo.live.windGust} kts (seuil: ${s.threshold} kts)`,
+        body: `${triggered} (seuil: ${s.threshold} kts)`,
         icon: '/favicon.svg',
         tag: `alert-${source.id}`
       };
 
-      try {
-        if ('serviceWorker' in navigator) {
-          navigator.serviceWorker.getRegistration().then(reg => {
-            if (reg && reg.active) {
-              reg.showNotification(title, options);
-            } else {
-              new window.Notification(title, options);
-            }
-          }).catch(() => new window.Notification(title, options));
-        } else {
-          new window.Notification(title, options);
-        }
-      } catch(e) { /* fallback */ }
-      
+      sendNotification(title, options);
       lastNotificationTimes.current[source.id] = now;
     });
   }, [allWindData, settings]);
 
-  return { settings, setThreshold, toggle };
+  return { settings, setThreshold, setAlertMode, toggle };
 }
