@@ -122,12 +122,12 @@ export default function HistoricalChart({ data }) {
         <ComposedChart data={filteredData} margin={{ top: 10, right: -10, left: -20, bottom: 0 }}>
           <defs>
             <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--accent-teal)" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="var(--accent-teal)" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#00e5ff" stopOpacity={0.45}/>
+              <stop offset="95%" stopColor="#00e5ff" stopOpacity={0.02}/>
             </linearGradient>
             <linearGradient id="colorMax" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="var(--accent-orange)" stopOpacity={0.3}/>
-              <stop offset="95%" stopColor="var(--accent-orange)" stopOpacity={0}/>
+              <stop offset="5%" stopColor="#ff6d00" stopOpacity={0.4}/>
+              <stop offset="95%" stopColor="#ff6d00" stopOpacity={0.02}/>
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
@@ -148,10 +148,11 @@ export default function HistoricalChart({ data }) {
           <YAxis 
             yAxisId="right"
             orientation="right"
-            stroke="#ff9800" 
+            stroke="#b39ddb" 
             fontSize={12} 
             tickFormatter={(val) => `${val}°`}
             domain={['auto', 'auto']}
+            opacity={0.5}
           />
           <Tooltip content={<CustomTooltip />} />
           <Area 
@@ -159,40 +160,44 @@ export default function HistoricalChart({ data }) {
             type="monotone" 
             dataKey="maxGust" 
             name="Rafale max" 
-            stroke="var(--accent-orange)" 
+            stroke="#ff6d00" 
             fillOpacity={1} 
             fill="url(#colorMax)" 
-            strokeWidth={2}
+            strokeWidth={2.5}
           />
           <Area 
             yAxisId="left"
             type="monotone" 
             dataKey="avgSpeed" 
             name="Vent moyen" 
-            stroke="var(--accent-teal)" 
+            stroke="#00e5ff" 
             fillOpacity={1} 
             fill="url(#colorAvg)" 
-            strokeWidth={2}
+            strokeWidth={2.5}
           />
           <Line
             yAxisId="right"
             type="monotone"
             dataKey="temperature"
             name="Temp. air"
-            stroke="#ff9800"
-            strokeWidth={3}
+            stroke="#b39ddb"
+            strokeWidth={1.5}
+            strokeDasharray="6 3"
             dot={false}
             connectNulls={true}
+            strokeOpacity={0.6}
           />
           <Line
             yAxisId="right"
             type="monotone"
             dataKey="waterTemp"
             name="Temp. eau"
-            stroke="#00b4d8"
-            strokeWidth={3}
+            stroke="#80cbc4"
+            strokeWidth={1.5}
+            strokeDasharray="6 3"
             dot={false}
             connectNulls={true}
+            strokeOpacity={0.6}
           />
         </ComposedChart>
       </ResponsiveContainer>
