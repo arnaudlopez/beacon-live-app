@@ -7,7 +7,7 @@ const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
 
-const CACHE_TTL_MS = 6 * 60 * 1000;
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 async function fetchMF(sid: string) {
@@ -134,19 +134,24 @@ async function fetchES() {
   return null;
 }
 
-function getParisOffsetMs(ts: number) {
-  try {
-    const d = new Date(ts);
-    const pStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
-    const uStr = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
-    
-    // Parse the output "MM/DD/YYYY, HH:mm:ss"
-    const pD = new Date(pStr.replace(',', ''));
-    const uD = new Date(uStr.replace(',', ''));
-    return pD.getTime() - uD.getTime();
-  } catch(e) {
-    return 3600000; // fallback to +1h winter time
+function getParisOffsetMs(_ts: number) {
+  // Winds-Up stores local Paris time as if it were UTC. We need to subtract the Paris offset.
+  // March last Sunday = DST switch. Before: CET = UTC+1. After: CEST = UTC+2.
+  // Simple approach: check the month/day to determine CET vs CEST.
+  const d = new Date(_ts);
+  const month = d.getUTCMonth(); // 0-indexed
+  const day = d.getUTCDate();
+  // CEST (UTC+2): last Sunday of March → last Sunday of October
+  // Approximate: April-September = CEST, November-February = CET, March/October = check day
+  if (month >= 3 && month <= 8) return 7200000; // Apr-Sep: CEST (+2h)
+  if (month <= 1 || month >= 10) return 3600000; // Nov-Feb: CET (+1h)
+  if (month === 2) { // March: CET until last Sunday
+    const lastSunday = 31 - ((5 + new Date(d.getUTCFullYear(), 2, 31).getDay()) % 7);
+    return day >= lastSunday ? 7200000 : 3600000;
   }
+  // October: CEST until last Sunday
+  const lastSundayOct = 31 - ((5 + new Date(d.getUTCFullYear(), 9, 31).getDay()) % 7);
+  return day >= lastSundayOct ? 3600000 : 7200000;
 }
 
 async function fetchWindsUp(sid: string) {
