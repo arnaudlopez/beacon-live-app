@@ -23,17 +23,15 @@ services:
     #   - "9888:80"
 
     # Option 2: Exposition via TRAEFIK (Reverse Proxy Automatique)
-    # Décommentez et ajustez ces labels si vous utilisez Traefik.
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.beaconlive.rule=Host(`ajaccio.surf`, `www.ajaccio.surf`)"
-      - "traefik.http.routers.beaconlive.entrypoints=websecure" # ou 'https' selon votre config Traefik
-      - "traefik.http.routers.beaconlive.tls.certresolver=letsencrypt" # Mettez le nom de votre resolver SSL
+      - "traefik.http.routers.beaconlive.entrypoints=web"
       - "traefik.http.services.beaconlive.loadbalancer.server.port=80"
     
     networks:
       - beacon-secure-net
-      # - traefik_network # DÉCOMMENTEZ POUR CONNECTER AU RÉSEAU DE TRAEFIK
+      - traefik_network
 
     # --------------------------------------------------------
     # SÉCURITÉ MAXIMUM (Hardening)
@@ -76,6 +74,7 @@ networks:
     driver: bridge
     internal: false
     
-  # DÉCOMMENTEZ SI VOUS UTILISEZ TRAEFIK (Mettez le nom exact du réseau de Traefik)
-  # traefik_network:
-  #   external: true
+  # Si votre réseau s'appelle autrement que "traefik", remplacez-le ici
+  traefik_network:
+    external: true
+    name: traefik
