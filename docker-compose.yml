@@ -10,9 +10,10 @@ services:
       args:
         - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
         - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
-        - VITE_INFOCLIMAT_TOKEN=${VITE_INFOCLIMAT_TOKEN}
     container_name: beacon-live
     restart: unless-stopped
+    environment:
+      - INFOCLIMAT_TOKEN=${INFOCLIMAT_TOKEN}
 
     # --------------------------------------------------------
     # RÉSEAU
