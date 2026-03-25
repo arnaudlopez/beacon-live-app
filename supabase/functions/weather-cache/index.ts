@@ -131,13 +131,28 @@ async function fetchES() {
   return null;
 }
 
+function getParisOffsetMs(ts: number) {
+  try {
+    const d = new Date(ts);
+    const pStr = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+    const uStr = new Intl.DateTimeFormat('en-US', { timeZone: 'UTC', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+    
+    // Parse the output "MM/DD/YYYY, HH:mm:ss"
+    const pD = new Date(pStr.replace(',', ''));
+    const uD = new Date(uStr.replace(',', ''));
+    return pD.getTime() - uD.getTime();
+  } catch(e) {
+    return 3600000; // fallback to +1h winter time
+  }
+}
+
 async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
   try {
-    const authRes = await fetch("https://www.winds-up.com/index.php?p=login&formu=1", {
+    const authRes = await fetch("https://www.winds-up.com/index.php", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `login=${encodeURIComponent(WINDSUP_USER)}&password=${encodeURIComponent(WINDSUP_PASS)}&form_sent=1`,
+      body: `login_pseudo=${encodeURIComponent(WINDSUP_USER)}&login_passwd=${encodeURIComponent(WINDSUP_PASS)}&action=post_login`,
       redirect: "manual"
     });
     
@@ -151,7 +166,8 @@ async function fetchWindsUp(sid: string) {
     });
     
     const html = await r.text();
-    const regex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*o:"([^"]*)"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
+    // Use img attribute to extract direction since 'o' can be empty
+    const regex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*img:"[^"]*-([A-Za-z]+)\.gif"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
     
     const degMap: Record<string, number> = {
       "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, 
@@ -161,31 +177,34 @@ async function fetchWindsUp(sid: string) {
     const history = [];
     let match;
     while ((match = regex.exec(html)) !== null) {
-      if (match[0].includes('abo:"no"')) continue;
+      if (match[0].includes('abo:"no"')) continue; // Skip faked premium data
       
-      const ts = parseInt(match[1]);
+      const fakeTs = parseInt(match[1]);
+      const tzOffset = getParisOffsetMs(fakeTs);
+      const realTs = fakeTs - tzOffset; // Strip the fake timezone shift so it's true UTC
+      
       const avg = parseFloat(match[2]);
-      const o = match[3];
+      const dirStr = match[3];
       const min = parseFloat(match[4]);
       const max = match[5] ? parseFloat(match[5]) : avg;
-      const dir = degMap[o] !== undefined ? degMap[o] : null;
+      const dir = degMap[dirStr.toUpperCase()] !== undefined ? degMap[dirStr.toUpperCase()] : null;
       
       history.push({
-        time: ts,
-        avgSpeed: avg,
-        maxGust: max,
+        time: realTs,
+        avgSpeed: Number(avg.toFixed(1)),
+        maxGust: Number(max.toFixed(1)),
         temperature: null,
         windDirection: dir
       });
     }
     
     if (history.length === 0) return null;
-    const live = history[history.length - 1];
+    const live = history[history.length - 1]; // sorted chronologically
     
     return {
       live: {
-        windSpeed: live.avgSpeed.toFixed(1),
-        windGust: live.maxGust.toFixed(1),
+        windSpeed: live.avgSpeed,
+        windGust: live.maxGust,
         windDirection: live.windDirection,
         temperature: null,
         humidity: null,
