@@ -90,7 +90,7 @@ export default function Dashboard() {
   });
 
   // Single unified hook for Supabase data
-  const { windData: baseWindData, surfData, waterData, isLoading, lastUpdated, error: fetchError } = useWeatherData();
+  const { windData: baseWindData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
   
   // Infoclimat proxy fetch
   const infoData = useInfoclimat();
@@ -263,8 +263,13 @@ export default function Dashboard() {
         <SurfWidget surfData={surfData} windData={windData} />
       </Suspense>
 
-      <div className="status-bar glass-panel" style={{ padding: '0.8rem 1.2rem', marginTop: '2rem' }} role="status">
+      <div className="status-bar glass-panel" style={{ padding: '0.8rem 1.2rem', marginTop: '2rem', transition: 'border-color 0.3s ease', borderColor: isRealtime ? 'rgba(34, 197, 94, 0.6)' : undefined }} role="status">
         <span>{errorMessage ? '🔴 Hors ligne' : '🟢 Connecté'}</span>
+        {isRealtime && (
+          <span style={{ marginLeft: '0.8rem', color: '#22c55e', fontWeight: 700, fontSize: '0.8rem', animation: 'fadeIn 0.3s ease' }}>
+            ⚡ Données reçues
+          </span>
+        )}
         <span style={{ float: 'right' }}>
           Mis à jour : {format(lastUpdated, 'HH:mm:ss')}
         </span>
