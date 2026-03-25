@@ -207,7 +207,7 @@ export default function HistoricalChart({ data }) {
         <>
           <h3 className="widget-title" style={{ margin: '0.8rem 0 0.3rem', fontSize: '0.8rem' }}>🧭 Direction du vent</h3>
           <ResponsiveContainer width="100%" height="35%">
-            <ComposedChart data={filteredData} margin={{ top: 5, right: -10, left: -20, bottom: 0 }}>
+            <ComposedChart data={filteredData} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis 
                 dataKey="time" 
