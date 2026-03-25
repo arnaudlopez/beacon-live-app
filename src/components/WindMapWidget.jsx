@@ -15,14 +15,47 @@ function MapCenterUpdater({ center }) {
   return null;
 }
 
-function WindMarker({ source, coords, active, onClick }) {
+function getTimeSince(history) {
+  if (!history || history.length === 0) return null;
+  const last = history[history.length - 1];
+  if (!last || !last.time) return null;
+  // Handle both ISO string and epoch ms
+  const ts = typeof last.time === 'number' ? last.time : new Date(last.time).getTime();
+  return Date.now() - ts;
+}
+
+function formatAge(ms) {
+  if (ms === null) return '';
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'Live';
+  if (min < 60) return `${min}min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `${h}h${min % 60 > 0 ? String(min % 60).padStart(2, '0') : ''}`;
+  return `${Math.floor(h / 24)}j`;
+}
+
+function getStaleLevel(ms) {
+  if (ms === null) return 'unknown';
+  if (ms < 10 * 60000) return 'fresh';     // < 10 min
+  if (ms < 60 * 60000) return 'warm';       // < 1 hour
+  return 'stale';                            // > 1 hour
+}
+
+function WindMarker({ source, coords, active, onClick, history }) {
   const data = source?.live;
   if (!data) return null;
 
   const hasDirection = data.windDirection !== null && data.windDirection !== undefined;
+  const ageMs = getTimeSince(history);
+  const level = getStaleLevel(ageMs);
+  const ageLabel = formatAge(ageMs);
+
+  const staleClass = level === 'stale' ? 'wind-marker-stale' : '';
+  const badgeColor = level === 'fresh' ? '#22c55e' : level === 'warm' ? '#f59e0b' : level === 'stale' ? '#ef4444' : '#6b7280';
+  const dotClass = level === 'fresh' ? 'stale-dot-pulse' : '';
 
   const icon = L.divIcon({
-    className: `custom-wind-icon ${active ? 'active-wind-marker' : ''}`,
+    className: `custom-wind-icon ${active ? 'active-wind-marker' : ''} ${staleClass}`,
     html: `
       <div class="wind-marker-container" style="cursor: pointer;">
         ${hasDirection ? `<div class="wind-arrow" style="transform: rotate(${data.windDirection}deg);">
@@ -33,6 +66,10 @@ function WindMarker({ source, coords, active, onClick }) {
         <div class="wind-label glass-panel" style="cursor: pointer;">
           <div class="wind-speed">${data.windSpeed} <span class="text-xs">kts</span></div>
           <div class="wind-gust">Max: ${data.windGust}</div>
+          <div class="wind-age-badge" style="color: ${badgeColor};">
+            <span class="stale-dot ${dotClass}" style="background: ${badgeColor};"></span>
+            ${ageLabel}
+          </div>
           ${active ? '<div class="wind-active-tag">● Actif</div>' : '<div class="wind-tap-hint">Tap pour voir</div>'}
         </div>
       </div>
@@ -91,6 +128,7 @@ export default function WindMapWidget({ allWindData, activeSourceId, sources, on
                 coords={s.coords} 
                 active={s.id === activeSourceId}
                 onClick={() => onSourceSelect && onSourceSelect(s)}
+                history={sourceData.history}
               />
             );
           })}
