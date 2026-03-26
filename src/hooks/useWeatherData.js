@@ -86,7 +86,7 @@ export function useWeatherData() {
     setSurfData({
       revellata: rev?.surf ? { ...rev.surf, waterTemp: rev.waterTemp, surfHistory: rev.surfHistory || [] } : null,
       bonifacio: bon?.surf ? { ...bon.surf, waterTemp: bon.waterTemp, surfHistory: bon.surfHistory || [] } : null,
-      ajaccio: esurf ? { ...esurf } : null,
+      ajaccio: esurf ? { ...esurf, surfHistory: esurf.surfHistory || [] } : null,
     });
   }, []);
 
