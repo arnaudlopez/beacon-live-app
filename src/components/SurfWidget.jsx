@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { getSurfReport } from '../utils/surfReport';
 import { degToCardinal } from '../utils/beaufort';
+import SurfHistoryChart from './SurfHistoryChart';
 
 // Hook to recenter the map smoothly
 function MapUpdater({ center }) {
@@ -288,6 +289,11 @@ export default function SurfWidget({ surfData, windData }) {
           </div>
         )}
       </div>
+
+      {/* Surf History Chart (CANDHIS spots only) */}
+      {data?.surfHistory && data.surfHistory.length > 0 && (
+        <SurfHistoryChart data={data.surfHistory} />
+      )}
     </div>
   );
 }
