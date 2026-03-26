@@ -119,8 +119,8 @@ function parseESDate(dateStr: string): number | null {
   return Date.UTC(new Date().getUTCFullYear(), monthIdx, day, hour, 0, 0);
 }
 
-async function fetchES() {
-  const r = await fetch("https://esurfmar.meteo.fr/real-time/html/ajaccio_data.html");
+async function fetchES(slug: string) {
+  const r = await fetch(`https://esurfmar.meteo.fr/real-time/html/${slug}_data.html`);
   if (!r.ok) return null;
   const html = await r.text();
   const rowRegex = /<tr bgcolor=#[F0-9A-Fa-f]{6}>\s*(<td class="data"[\s\S]*?)<\/tr>/gi;
@@ -284,7 +284,8 @@ const SF: Record<string, F> = {
   pioupiou_1202: () => fetchPP("1202"),
   candhis_revellata: () => fetchCD("Y2FtcD0wMkIwNA=="),
   candhis_bonifacio: () => fetchCD("Y2FtcD0wMkEwMQ=="),
-  esurfmar_ajaccio: () => fetchES(),
+  esurfmar_ajaccio: () => fetchES("ajaccio"),
+  esurfmar_calvi: () => fetchES("calvi"),
   windsup_porticcio: () => fetchWindsUp("porticcio--windsurf-kitesurf-1726"),
   wunderground_IGROSS105: () => fetchWU("IGROSS105"),
   wunderground_ISARROLA7: () => fetchWU("ISARROLA7"),
@@ -316,7 +317,7 @@ Deno.serve(async (req: Request) => {
           const lastObs = hist[hist.length - 1];
           if (lastObs && lastObs.time) { if (now - new Date(lastObs.time).getTime() > 15 * 60 * 1000) ttl = 30 * 1000; }
         }
-        if (s === 'esurfmar_ajaccio' && e.data && (e.data as any).surfHistory && (e.data as any).surfHistory.length > 0) {
+        if (s.startsWith('esurfmar_') && e.data && (e.data as any).surfHistory && (e.data as any).surfHistory.length > 0) {
           const hist = (e.data as any).surfHistory;
           const lastObs = hist[hist.length - 1];
           if (lastObs && lastObs.time) { 
