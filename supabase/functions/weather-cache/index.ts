@@ -7,9 +7,17 @@ const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
 const INFOCLIMAT_TOKEN = Deno.env.get("INFOCLIMAT_TOKEN")||"";
+const WU_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525";
 
-const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+const CACHE_TTL_DEFAULT = 3 * 60 * 1000; // 3 min
+const CACHE_TTL_WU_FAST = 30 * 1000;     // 30s for Wunderground (Fast update stations)
+const CACHE_TTL_WU_SLOW = 15 * 60 * 1000;// 15m for ICORSEPR2 (Slow update station)
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+function getCacheTTL(source: string): number {
+  if (source === 'wunderground_ICORSEPR2') return CACHE_TTL_WU_SLOW;
+  return source.startsWith('wunderground_') ? CACHE_TTL_WU_FAST : CACHE_TTL_DEFAULT;
+}
 
 async function fetchMF(sid: string) {
   const r = await fetch(`https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/infrahoraire-6m?id_station=${sid}&format=json`, {
@@ -66,9 +74,7 @@ async function fetchPP(sid: string) {
       windSpeed: (m.wind_speed_avg / 1.852).toFixed(1),
       windGust: (m.wind_speed_max / 1.852).toFixed(1),
       windDirection: m.wind_heading,
-      temperature: null,
-      humidity: null,
-      pressure: null
+      temperature: null, humidity: null, pressure: null
     },
     history: h
   };
@@ -76,255 +82,198 @@ async function fetchPP(sid: string) {
 
 async function fetchCD(b: string) {
   const r = await fetch(`https://candhis.cerema.fr/_public_/campagne.php?${b}`);
-  if (!r.ok) return { waterTemp: null, waterHistory: [], surf: null };
+  if (!r.ok) return { waterTemp: null, waterHistory: [], surf: null, surfHistory: [] };
   const html = await r.text();
-  let wt = null;
-  let wh: unknown[] = [];
-  let sf = null;
+  let wt = null; let wh: unknown[] = []; let sf = null; let surfHistory: unknown[] = [];
   const mt = html.match(/arrDataPHP\[4\]\s*=\s*eval\('(\[.*?\])'\);/);
-  if (mt?.[1]) {
-    const a = JSON.parse(mt[1]);
-    if (a?.length > 0) {
-      wt = a[0][1];
-      wh = a.map((i: [string, number]) => ({ time: new Date(i[0].replace(" ", "T")).getTime(), waterTemp: i[1] }));
-    }
-  }
+  if (mt?.[1]) { const a = JSON.parse(mt[1]); if (a?.length > 0) { wt = a[0][1]; wh = a.map((i: [string, number]) => ({ time: new Date(i[0].replace(" ", "T")).getTime(), waterTemp: i[1] })); } }
   const mH = html.match(/arrDataPHP\[0\]\s*=\s*eval\('(\[.*?\])'\);/);
   const mP = html.match(/arrDataPHP\[1\]\s*=\s*eval\('(\[.*?\])'\);/);
   const mD = html.match(/arrDataPHP\[2\]\s*=\s*eval\('(\[.*?\])'\);/);
   const mS = html.match(/arrDataPHP\[3\]\s*=\s*eval\('(\[.*?\])'\);/);
   if (mH && mP && mD) {
-    const aH = JSON.parse(mH[1]);
-    const aP = JSON.parse(mP[1]);
-    const aD = JSON.parse(mD[1]);
-    const aS = mS ? JSON.parse(mS[1]) : [];
+    const aH = JSON.parse(mH[1]); const aP = JSON.parse(mP[1]); const aD = JSON.parse(mD[1]); const aS = mS ? JSON.parse(mS[1]) : [];
     if (aH.length > 0 && aP.length > 0 && aD.length > 0) {
-      sf = {
-        height: aH[0][1],
-        hmax: aH[0][3],
-        period: aP[0][1],
-        direction: aD[0][1],
-        spread: aS.length > 0 ? aS[0][1] : null
-      };
+      sf = { height: aH[0][1], hmax: aH[0][3], period: aP[0][1], direction: aD[0][1], spread: aS.length > 0 ? aS[0][1] : null };
+      const byTime = new Map<string, Record<string, number|null>>();
+      for (const row of aH) { const ts = new Date(row[0].replace(" ", "T")).getTime(); const key = String(ts); if (!byTime.has(key)) byTime.set(key, { time: ts, height: null, hmax: null, period: null, direction: null, spread: null }); const entry = byTime.get(key)!; entry.height = row[1]; if (row[3] !== undefined) entry.hmax = row[3]; }
+      for (const row of aP) { const ts = new Date(row[0].replace(" ", "T")).getTime(); const key = String(ts); if (!byTime.has(key)) byTime.set(key, { time: ts, height: null, hmax: null, period: null, direction: null, spread: null }); byTime.get(key)!.period = row[1]; }
+      for (const row of aD) { const ts = new Date(row[0].replace(" ", "T")).getTime(); const key = String(ts); if (byTime.has(key)) byTime.get(key)!.direction = row[1]; }
+      for (const row of aS) { const ts = new Date(row[0].replace(" ", "T")).getTime(); const key = String(ts); if (byTime.has(key)) byTime.get(key)!.spread = row[1]; }
+      surfHistory = Array.from(byTime.values()).sort((a: any, b: any) => a.time - b.time);
     }
   }
-  return { waterTemp: wt, waterHistory: wh, surf: sf };
+  return { waterTemp: wt, waterHistory: wh, surf: sf, surfHistory };
+}
+
+const FR_MONTHS: Record<string, number> = {
+  'janvier': 0, 'f\u00e9vrier': 1, 'fevrier': 1, 'mars': 2, 'avril': 3, 'mai': 4, 'juin': 5,
+  'juillet': 6, 'ao\u00fbt': 7, 'aout': 7, 'septembre': 8, 'octobre': 9, 'novembre': 10, 'd\u00e9cembre': 11, 'decembre': 11
+};
+
+function parseESDate(dateStr: string): number | null {
+  const m = dateStr.match(/(\d{1,2})\s+(\w+)\s+(\d{2})TU/);
+  if (!m) return null;
+  const day = parseInt(m[1]); const monthName = m[2].toLowerCase(); const hour = parseInt(m[3]);
+  const monthIdx = FR_MONTHS[monthName]; if (monthIdx === undefined) return null;
+  return Date.UTC(new Date().getUTCFullYear(), monthIdx, day, hour, 0, 0);
 }
 
 async function fetchES() {
   const r = await fetch("https://esurfmar.meteo.fr/real-time/html/ajaccio_data.html");
   if (!r.ok) return null;
   const html = await r.text();
-  const rm = html.match(/<tr bgcolor=#[F0-9A-Fa-f]{6}>\s*(<td class="data"(.|[\n])*?)<\/tr>/i);
-  if (!rm) return null;
-  const rx = /<td[^>]*>(.*?)<\/td>/gs;
-  const ts: string[] = [];
-  let tm;
-  while ((tm = rx.exec(rm[1])) !== null) {
-    ts.push(tm[1].replace(/<[^>]*>?/gm, "").replace(/&nbsp;/g, "").trim());
+  const rowRegex = /<tr bgcolor=#[F0-9A-Fa-f]{6}>\s*(<td class="data"[\s\S]*?)<\/tr>/gi;
+  const cellRegex = /<td[^>]*>(.*?)<\/td>/gs;
+  
+  const surfHistory: Array<{time: number, height: number|null, hmax: number|null, period: number|null, direction: number|null}> = [];
+  const windHistory: Array<{time: number, avgSpeed: number, maxGust: number, temperature: number|null, windDirection: number|null}> = [];
+  
+  let latestRow: string[] | null = null; 
+  let latestWindRow: string[] | null = null;
+  let rowMatch;
+  while ((rowMatch = rowRegex.exec(html)) !== null) {
+    const rowContent = rowMatch[1]; 
+    const cells: string[] = []; 
+    let cellMatch; 
+    cellRegex.lastIndex = 0;
+    while ((cellMatch = cellRegex.exec(rowContent)) !== null) { cells.push(cellMatch[1].replace(/<[^>]*>?/gm, "").replace(/&nbsp;/g, "").trim()); }
+    
+    if (cells.length >= 11) {
+      const ts = parseESDate(cells[0]);
+      if (!ts) continue;
+
+      const hasWave = (!isNaN(parseFloat(cells[9])) || !isNaN(parseFloat(cells[8])));
+      const hasWind = (!isNaN(parseFloat(cells[2])) || !isNaN(parseFloat(cells[3])));
+
+      if (!latestRow && hasWave) latestRow = cells;
+      if (!latestWindRow && hasWind) latestWindRow = cells;
+
+      if (hasWave) {
+        surfHistory.push({ 
+          time: ts, 
+          height: cells[9] ? parseFloat(cells[9]) : null, 
+          hmax: cells[10] ? parseFloat(cells[10]) : null, 
+          period: cells[8] ? parseFloat(cells[8]) : null, 
+          direction: cells[1] ? parseInt(cells[1]) : 270
+        });
+      }
+
+      if (hasWind) {
+        windHistory.push({ 
+           time: ts, 
+           avgSpeed: cells[2] ? parseFloat(cells[2]) : 0, 
+           maxGust: cells[3] ? parseFloat(cells[3]) : 0, 
+           temperature: cells[4] ? parseFloat(cells[4]) : null, 
+           windDirection: cells[1] ? parseInt(cells[1]) : null 
+        });
+      }
+    }
   }
-  if (ts.length >= 11) {
-    return {
-      direction: ts[1] || null,
-      period: ts[8] || null,
-      height: ts[9] || null,
-      hmax: ts[10] || null,
-      waterTemp: ts[5] || null
+  
+  surfHistory.sort((a, b) => a.time - b.time);
+  windHistory.sort((a, b) => a.time - b.time);
+
+  if (!latestRow && !latestWindRow) return null;
+
+  const result: any = {
+    surfHistory,
+    history: windHistory
+  };
+
+  if (latestRow) {
+    result.period = latestRow[8] ? parseFloat(latestRow[8]) : null;
+    result.height = latestRow[9] ? parseFloat(latestRow[9]) : null;
+    result.hmax = latestRow[10] ? parseFloat(latestRow[10]) : null;
+    result.waterTemp = latestRow[5] ? parseFloat(latestRow[5]) : null;
+    result.direction = latestWindRow?.[1] ? parseInt(latestWindRow[1]) : 270;
+  }
+
+  if (latestWindRow) {
+    result.live = {
+      windSpeed: latestWindRow[2] ? parseFloat(latestWindRow[2]) : 0,
+      windGust: latestWindRow[3] ? parseFloat(latestWindRow[3]) : 0,
+      windDirection: latestWindRow[1] ? parseInt(latestWindRow[1]) : null,
+      temperature: latestWindRow[4] ? parseFloat(latestWindRow[4]) : null,
+      humidity: latestWindRow[6] ? parseFloat(latestWindRow[6]) : null,
+      pressure: latestWindRow[7] ? parseFloat(latestWindRow[7]) : null
     };
   }
-  return null;
+
+  return result;
 }
 
 function getParisOffsetMs(_ts: number) {
-  // Winds-Up stores local Paris time as if it were UTC. We need to subtract the Paris offset.
-  // March last Sunday = DST switch. Before: CET = UTC+1. After: CEST = UTC+2.
-  // Simple approach: check the month/day to determine CET vs CEST.
-  const d = new Date(_ts);
-  const month = d.getUTCMonth(); // 0-indexed
-  const day = d.getUTCDate();
-  // CEST (UTC+2): last Sunday of March → last Sunday of October
-  // Approximate: April-September = CEST, November-February = CET, March/October = check day
-  if (month >= 3 && month <= 8) return 7200000; // Apr-Sep: CEST (+2h)
-  if (month <= 1 || month >= 10) return 3600000; // Nov-Feb: CET (+1h)
-  if (month === 2) { // March: CET until last Sunday
-    const lastSunday = 31 - ((5 + new Date(d.getUTCFullYear(), 2, 31).getDay()) % 7);
-    return day >= lastSunday ? 7200000 : 3600000;
-  }
-  // October: CEST until last Sunday
-  const lastSundayOct = 31 - ((5 + new Date(d.getUTCFullYear(), 9, 31).getDay()) % 7);
-  return day >= lastSundayOct ? 3600000 : 7200000;
+  const d = new Date(_ts); const month = d.getUTCMonth(); const day = d.getUTCDate();
+  if (month >= 3 && month <= 8) return 7200000;
+  if (month <= 1 || month >= 10) return 3600000;
+  if (month === 2) { const ls = 31 - ((5 + new Date(d.getUTCFullYear(), 2, 31).getDay()) % 7); return day >= ls ? 7200000 : 3600000; }
+  const ls = 31 - ((5 + new Date(d.getUTCFullYear(), 9, 31).getDay()) % 7); return day >= ls ? 3600000 : 7200000;
 }
 
 async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
   try {
-    const authRes = await fetch("https://www.winds-up.com/index.php", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `login_pseudo=${encodeURIComponent(WINDSUP_USER)}&login_passwd=${encodeURIComponent(WINDSUP_PASS)}&action=post_login`,
-      redirect: "manual"
-    });
-    
+    const authRes = await fetch("https://www.winds-up.com/index.php", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `login_pseudo=${encodeURIComponent(WINDSUP_USER)}&login_passwd=${encodeURIComponent(WINDSUP_PASS)}&action=post_login`, redirect: "manual" });
     const cookieHeader = authRes.headers.get("set-cookie") || "";
-    const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/);
-    if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
-    
+    const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/); if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
     const c = `PHPSESSID=${sidMatch[1]}`;
     const baseUrl = `https://www.winds-up.com/spot-${sid}-observations-releves-vent.html`;
-
-    // Fetch today + yesterday for 48h coverage
     const yesterday = new Date(Date.now() - 24 * 3600000);
     const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
-    
-    const [rToday, rYesterday] = await Promise.all([
-      fetch(baseUrl, { headers: { "Cookie": c } }),
-      fetch(`${baseUrl}?date=${yStr}`, { headers: { "Cookie": c } })
-    ]);
-    
-    const htmlToday = await rToday.text();
-    const htmlYesterday = await rYesterday.text();
-
-    // Cardinal direction → degree mapping (used for `o` field from Highcharts)
-    const degMap: Record<string, number> = {
-      "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, 
-      "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337
-    };
-
+    const [rToday, rYesterday] = await Promise.all([ fetch(baseUrl, { headers: { "Cookie": c } }), fetch(`${baseUrl}?date=${yStr}`, { headers: { "Cookie": c } }) ]);
+    const htmlToday = await rToday.text(); const htmlYesterday = await rYesterday.text();
+    const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
     function parseWindsUpPage(html: string) {
-      // Step 1: Parse the HTML table for precise degrees (only works for today's page)
       const tableDegMap = new Map<string, number>();
       const tableRowRegex = /- (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})\u00b0/g;
-      let tableMatch;
-      while ((tableMatch = tableRowRegex.exec(html)) !== null) {
-        const timeKey = tableMatch[1];
-        const deg = parseInt(tableMatch[2]);
-        if (!tableDegMap.has(timeKey)) {
-          tableDegMap.set(timeKey, deg);
-        }
-      }
-
-      // Step 2: Parse Highcharts data — now also extract o:"..." for cardinal direction
+      let tableMatch; while ((tableMatch = tableRowRegex.exec(html)) !== null) { if (!tableDegMap.has(tableMatch[1])) tableDegMap.set(tableMatch[1], parseInt(tableMatch[2])); }
       const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*o:"([^"]*)"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
       const points: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
-      let match;
-      while ((match = chartRegex.exec(html)) !== null) {
+      let match; while ((match = chartRegex.exec(html)) !== null) {
         if (match[0].includes('abo:"no"')) continue;
-        
-        const fakeTs = parseInt(match[1]);
-        const tzOffset = getParisOffsetMs(fakeTs);
-        const realTs = fakeTs - tzOffset;
-        
-        const avg = parseFloat(match[2]);
-        const oField = match[3]; // cardinal direction from authenticated data e.g. "N", "NO", "NNO"
-        const min = parseFloat(match[4]);
-        const max = match[5] ? parseFloat(match[5]) : avg;
-
-        // Build HH:MM key for table lookup
-        const localDate = new Date(fakeTs);
-        const hh = String(localDate.getUTCHours()).padStart(2, '0');
-        const mm = String(localDate.getUTCMinutes()).padStart(2, '0');
-        const minuteKey = `${hh}:${mm}`;
-        
-        // Priority: table precise degree > o field cardinal > null
-        let dir: number | null = null;
-        const tableDeg = tableDegMap.get(minuteKey);
-        if (tableDeg !== undefined) {
-          dir = tableDeg; // Precise degree from table (e.g. 337)
-        } else if (oField && degMap[oField] !== undefined) {
-          dir = degMap[oField]; // Cardinal from chart (e.g. "NNO" → 337)
-        }
-        
-        points.push({
-          time: realTs,
-          avgSpeed: Number(avg.toFixed(1)),
-          maxGust: Number(max.toFixed(1)),
-          temperature: null,
-          windDirection: dir
-        });
+        const fakeTs = parseInt(match[1]); const tzOffset = getParisOffsetMs(fakeTs); const realTs = fakeTs - tzOffset;
+        const avg = parseFloat(match[2]); const oField = match[3]; const max = match[5] ? parseFloat(match[5]) : avg;
+        const localDate = new Date(fakeTs); const minuteKey = `${String(localDate.getUTCHours()).padStart(2,'0')}:${String(localDate.getUTCMinutes()).padStart(2,'0')}`;
+        let dir: number | null = null; const tableDeg = tableDegMap.get(minuteKey);
+        if (tableDeg !== undefined) dir = tableDeg; else if (oField && degMap[oField] !== undefined) dir = degMap[oField];
+        points.push({ time: realTs, avgSpeed: Number(avg.toFixed(1)), maxGust: Number(max.toFixed(1)), temperature: null, windDirection: dir });
       }
       return points;
     }
-
-    const yesterdayPoints = parseWindsUpPage(htmlYesterday);
-    const todayPoints = parseWindsUpPage(htmlToday);
-    
-    // Merge: yesterday first, then today. Deduplicate by timestamp.
-    const seen = new Set<number>();
-    const history = [];
-    for (const p of [...yesterdayPoints, ...todayPoints]) {
-      if (!seen.has(p.time)) {
-        seen.add(p.time);
-        history.push(p);
-      }
-    }
+    const yesterdayPoints = parseWindsUpPage(htmlYesterday); const todayPoints = parseWindsUpPage(htmlToday);
+    const seen = new Set<number>(); const history = [];
+    for (const p of [...yesterdayPoints, ...todayPoints]) { if (!seen.has(p.time)) { seen.add(p.time); history.push(p); } }
     history.sort((a, b) => a.time - b.time);
-    
     if (history.length === 0) return null;
     const live = history[history.length - 1];
-    
-    return {
-      live: {
-        windSpeed: live.avgSpeed,
-        windGust: live.maxGust,
-        windDirection: live.windDirection,
-        temperature: null,
-        humidity: null,
-        pressure: null
-      },
-      history: history
-    };
-  } catch (e) {
-    console.error("WindsUp err:", e);
-    return null;
-  }
+    return { live: { windSpeed: live.avgSpeed, windGust: live.maxGust, windDirection: live.windDirection, temperature: null, humidity: null, pressure: null }, history };
+  } catch (e) { console.error("WindsUp err:", e); return null; }
 }
 
-async function fetchInfo() {
-  if (!INFOCLIMAT_TOKEN) return null;
-  const sid = 'STATIC0317';
+async function fetchWU(stationId: string) {
+  const baseUrl = "https://api.weather.com/v2/pws";
   try {
-    const end = new Date();
-    const start = new Date(end.getTime() - 24 * 3600000);
-    const fStart = start.toISOString().split('T')[0];
-    const fEnd = end.toISOString().split('T')[0];
-    const url = `https://www.infoclimat.fr/opendata/?version=2&method=get&format=json&stations[]=${sid}&start=${fStart}&end=${fEnd}&token=${INFOCLIMAT_TOKEN}`;
-    const r = await fetch(url);
-    if (!r.ok) return null;
-    const json = await r.json();
-    const hourly = json.hourly?.[sid] || [];
-    if (hourly.length === 0) return null;
-
-    const historyRev = [...hourly].reverse();
-    const latest = historyRev.find((h: any) => h.vent_moyen !== null) || historyRev[0];
-
-    const history = hourly.map((h: any) => {
-      const speedKmh = parseFloat(h.vent_moyen || 0);
-      const gustKmh = parseFloat(h.vent_rafales_10min || h.vent_rafales || 0);
-      return {
-        time: h.dh_utc.replace(' ', 'T') + 'Z',
-        avgSpeed: Number((speedKmh / 1.852).toFixed(1)),
-        maxGust: Number((gustKmh / 1.852).toFixed(1)),
-        temperature: h.temperature ? Number(h.temperature) : null,
-        windDirection: h.vent_direction ? parseInt(h.vent_direction, 10) : null
-      };
-    }).filter((item: any) => item.time);
-
-    const liveSpeedKmh = parseFloat(latest.vent_moyen || 0);
-    const liveGustKmh = parseFloat(latest.vent_rafales_10min || latest.vent_rafales || 0);
-
-    return {
-      live: {
-        windSpeed: (liveSpeedKmh / 1.852).toFixed(1),
-        windGust: (liveGustKmh / 1.852).toFixed(1),
-        windDirection: latest.vent_direction ? parseInt(latest.vent_direction, 10) : null,
-        temperature: latest.temperature ? Number(latest.temperature) : null
-      },
-      history: history
-    };
-  } catch (e) {
-    console.error("InfoClimat err:", e);
-    return null;
-  }
+    const [liveRes, histRes] = await Promise.all([
+      fetch(`${baseUrl}/observations/current?apiKey=${WU_API_KEY}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`),
+      fetch(`${baseUrl}/observations/all/1day?apiKey=${WU_API_KEY}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`)
+    ]);
+    if (!liveRes.ok) { console.error(`WU live ${stationId}:${liveRes.status}`); return null; }
+    const liveJson = await liveRes.json(); const obs = liveJson.observations?.[0]; if (!obs) return null;
+    const met = obs.metric || obs.imperial;
+    const toKts = (kmh: number) => Number((kmh / 1.852).toFixed(1));
+    const live = { windSpeed: toKts(met.windSpeed || 0), windGust: toKts(met.windGust || 0), windDirection: obs.winddir || 0, temperature: met.temp !== undefined ? Number(met.temp.toFixed(1)) : null, humidity: obs.humidity || null, pressure: met.pressure || null };
+    let history: Array<{time: string, avgSpeed: number, maxGust: number, temperature: number|null, windDirection: number|null}> = [];
+    if (histRes.ok) {
+      const histJson = await histRes.json(); const hObs = histJson.observations || [];
+      history = hObs.map((h: any) => { const hm = h.metric || h.imperial; return { time: new Date(h.obsTimeUtc).toISOString(), avgSpeed: toKts(hm.windspeedAvg || 0), maxGust: toKts(hm.windgustHigh || 0), temperature: hm.tempAvg !== undefined ? Number(hm.tempAvg.toFixed(1)) : null, windDirection: h.winddirAvg !== undefined ? h.winddirAvg : null }; });
+    }
+    const liveTime = new Date(obs.obsTimeUtc).toISOString();
+    if (history.length === 0 || new Date(history[history.length - 1].time).getTime() < new Date(liveTime).getTime()) {
+      history.push({ time: liveTime, avgSpeed: live.windSpeed, maxGust: live.windGust, temperature: live.temperature, windDirection: live.windDirection });
+    }
+    return { live, history };
+  } catch (e) { console.error(`WU err ${stationId}:`, e); return null; }
 }
 
 type F = () => Promise<unknown>;
@@ -337,78 +286,43 @@ const SF: Record<string, F> = {
   candhis_bonifacio: () => fetchCD("Y2FtcD0wMkEwMQ=="),
   esurfmar_ajaccio: () => fetchES(),
   windsup_porticcio: () => fetchWindsUp("porticcio--windsurf-kitesurf-1726"),
-  infoclimat_000V0: () => fetchInfo()
+  wunderground_IGROSS105: () => fetchWU("IGROSS105"),
+  wunderground_ISARROLA7: () => fetchWU("ISARROLA7"),
+  wunderground_ICORSEPR2: () => fetchWU("ICORSEPR2"),
+  wunderground_ISARTN1: () => fetchWU("ISARTN1"),
+  wunderground_IBONIF6: () => fetchWU("IBONIF6"),
+  owm_1202: () => fetchPP("1202")
 };
 
 Deno.serve(async (req: Request) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, {
-      headers: {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "authorization,x-client-info,apikey,content-type",
-        "Access-Control-Allow-Methods": "POST,GET,OPTIONS"
-      }
-    });
-  }
-
+  if (req.method === "OPTIONS") { return new Response(null, { headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization,x-client-info,apikey,content-type", "Access-Control-Allow-Methods": "POST,GET,OPTIONS" } }); }
   try {
     let rs = Object.keys(SF);
-    if (req.method === "POST") {
-      const b = await req.json();
-      if (b.sources && Array.isArray(b.sources)) {
-        rs = b.sources.filter((s: string) => s in SF);
-      }
-    }
-
-    const now = Date.now();
-    const res: Record<string, unknown> = {};
+    if (req.method === "POST") { const b = await req.json(); if (b.sources && Array.isArray(b.sources)) rs = b.sources.filter((s: string) => s in SF); }
+    const now = Date.now(); const res: Record<string, unknown> = {};
     const { data: c } = await supabase.from("weather_cache").select("source,data,fetched_at").in("source", rs);
-    const cm = new Map<string, { data: unknown; fetched_at: string }>();
-    if (c) {
-      for (const r of c) {
-        cm.set(r.source, r);
-      }
-    }
-
+    const cm = new Map<string, { data: unknown; fetched_at: string }>(); if (c) { for (const r of c) cm.set(r.source, r); }
     await Promise.all(rs.map(async (s) => {
       const e = cm.get(s);
       if (e) {
-        const a = now - new Date(e.fetched_at).getTime();
-        if (a < CACHE_TTL_MS) {
-          res[s] = e.data;
-          return;
+        let ttl = getCacheTTL(s);
+        if (s.startsWith('meteofrance_') && e.data && (e.data as any).history && (e.data as any).history.length > 0) {
+          const hist = (e.data as any).history;
+          const lastObs = hist[hist.length - 1];
+          if (lastObs && lastObs.time) { if (now - new Date(lastObs.time).getTime() > 6 * 60 * 1000) ttl = 30 * 1000; }
         }
-      }
-      
-      const f = SF[s];
-      if (!f) return;
-      
-      try {
-        const d = await f();
-        if (d !== null) {
-          await supabase.from("weather_cache").upsert({ source: s, data: d, fetched_at: new Date().toISOString() });
-          res[s] = d;
-        } else {
-          res[s] = e?.data ?? null;
+        if (s === 'wunderground_ICORSEPR2' && e.data && (e.data as any).history && (e.data as any).history.length > 0) {
+          const hist = (e.data as any).history;
+          const lastObs = hist[hist.length - 1];
+          if (lastObs && lastObs.time) { if (now - new Date(lastObs.time).getTime() > 15 * 60 * 1000) ttl = 30 * 1000; }
         }
-      } catch (err) {
-        console.error(`Err ${s}:`, err);
-        res[s] = e?.data ?? null;
+        const age = now - new Date(e.fetched_at).getTime();
+        if (age < ttl) { res[s] = e.data; return; }
       }
+      const f = SF[s]; if (!f) return;
+      try { const d = await f(); if (d !== null) { await supabase.from("weather_cache").upsert({ source: s, data: d, fetched_at: new Date().toISOString() }); res[s] = d; } else { res[s] = e?.data ?? null; } }
+      catch (err) { console.error(`Err ${s}:`, err); res[s] = e?.data ?? null; }
     }));
-
-    return new Response(JSON.stringify({ data: res, ts: new Date().toISOString() }), {
-      headers: {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Cache-Control": "public,max-age=30"
-      }
-    });
-  } catch (err) {
-    console.error(err);
-    return new Response(JSON.stringify({ error: "err" }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
-    });
-  }
+    return new Response(JSON.stringify({ data: res, ts: new Date().toISOString() }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*", "Cache-Control": "public,max-age=15" } });
+  } catch (err) { console.error(err); return new Response(JSON.stringify({ error: "err" }), { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }); }
 });
