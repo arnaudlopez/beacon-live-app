@@ -3,7 +3,7 @@ import { Wind, Thermometer, Droplets, Compass, Activity, Bell, BellOff } from 'l
 import { format } from 'date-fns';
 import HistoricalChart from './HistoricalChart';
 import { useWeatherData } from '../hooks/useWeatherData';
-import { useInfoclimat } from '../hooks/useInfoclimat';
+
 import { useNotifications } from '../hooks/useNotifications';
 import { SOURCES } from '../config/sources';
 import { getBeaufort, degToCardinal } from '../utils/beaufort';
@@ -89,17 +89,8 @@ export default function Dashboard() {
     return SOURCES.find(s => s.id === savedId) || SOURCES[0];
   });
 
-  // Supabase data (all sources except Infoclimat which needs IP-whitelisted proxy)
-  const { windData: baseWindData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
-
-  // Infoclimat via nginx proxy (IP whitelisted — token injecté côté serveur)
-  const infoData = useInfoclimat();
-
-  // Merge Infoclimat with Supabase Edge Function data
-  const windData = useMemo(() => {
-    if (!infoData) return baseWindData;
-    return { ...baseWindData, coti_chiavari: infoData };
-  }, [baseWindData, infoData]);
+  // All data via Supabase Edge Function + Realtime
+  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
 
   const notifications = useNotifications(windData);
 

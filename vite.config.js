@@ -29,13 +29,6 @@ export default defineConfig({
     })
   ],
   server: {
-    allowedHosts: true,
-    proxy: {
-      '/api/infoclimat': {
-        target: 'https://www.infoclimat.fr/opendata',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api\/infoclimat/, '')
-      }
-    }
+    allowedHosts: true
   }
 })

@@ -27,12 +27,8 @@ RUN npm run build
 # Étape 2 : Serveur web (Nginx) pour servir les fichiers statiques
 FROM nginx:alpine
 
-# Le token Infoclimat est injecté dans le nginx.conf au build (jamais dans le JS client)
-ARG VITE_INFOCLIMAT_TOKEN
-
-# Copier la configuration Nginx et injecter le token via sed
+# Copier la configuration Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
-RUN sed -i "s|__INFOCLIMAT_TOKEN__|${VITE_INFOCLIMAT_TOKEN}|g" /etc/nginx/conf.d/default.conf
 
 # Copier les fichiers buildés depuis l'étape 1
 COPY --from=build /app/dist /usr/share/nginx/html

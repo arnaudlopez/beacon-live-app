@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
-const INFOCLIMAT_TOKEN = Deno.env.get("INFOCLIMAT_TOKEN")||"";
+
 const WU_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525";
 
 const CACHE_TTL_DEFAULT = 3 * 60 * 1000; // 3 min
