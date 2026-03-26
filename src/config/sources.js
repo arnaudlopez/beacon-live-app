@@ -8,7 +8,8 @@ export const SOURCES = [
   { id: 'owm-1202', name: 'San Bastianu (OWM)', type: 'owm', pioupiouId: '1202', coords: [42.164, 8.618] },
   { id: 'porticcio', name: 'Porticcio', type: 'windsup', stationId: '1726', coords: [41.868, 8.787] },
   { id: 'porticcio_haut', name: 'Nebbiajo', type: 'wunderground', stationId: 'IGROSS105', coords: [41.903, 8.828] },
-  { id: 'mezzavia', name: 'Mezzavia', type: 'wunderground', stationId: 'ISARROLA7', coords: [41.951, 8.787] }
+  { id: 'mezzavia', name: 'Mezzavia', type: 'wunderground', stationId: 'ISARROLA7', coords: [41.951, 8.787] },
+  { id: 'propriano', name: 'Propriano', type: 'wunderground', stationId: 'ICORSEPR2', coords: [41.674, 8.899] }
 ];
 
 export const CANDHIS_STATIONS = {
