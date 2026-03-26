@@ -143,6 +143,7 @@ export default function HistoricalChart({ data }) {
             yAxisId="left"
             stroke="#b39ddb" 
             fontSize={12} 
+            width={30}
             tickFormatter={(val) => `${Math.round(val)}°`}
             domain={['auto', 'auto']}
             opacity={0.5}
@@ -152,6 +153,7 @@ export default function HistoricalChart({ data }) {
             orientation="right"
             stroke="var(--text-secondary)" 
             fontSize={12} 
+            width={30}
             tickFormatter={(val) => Math.round(val)}
           />
           <Tooltip content={<CustomTooltip />} />
@@ -223,7 +225,9 @@ export default function HistoricalChart({ data }) {
                 tickFormatter={(val) => cardinalLabels[val] || `${val}°`}
                 stroke="var(--text-secondary)" 
                 fontSize={12}
+                width={30}
               />
+              <YAxis orientation="right" width={30} tick={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} />
               <Line
                 type="stepAfter"

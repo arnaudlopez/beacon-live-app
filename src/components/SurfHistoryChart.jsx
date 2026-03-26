@@ -75,6 +75,7 @@ export default function SurfHistoryChart({ data }) {
             yAxisId="left"
             stroke="#00e5ff"
             fontSize={11}
+            width={30}
             tickFormatter={(v) => `${v}m`}
             domain={[0, 'auto']}
           />
@@ -83,6 +84,7 @@ export default function SurfHistoryChart({ data }) {
             orientation="right"
             stroke="#b39ddb"
             fontSize={11}
+            width={30}
             tickFormatter={(v) => `${v}s`}
             domain={[0, 'auto']}
             opacity={0.6}
