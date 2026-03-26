@@ -155,7 +155,7 @@ async function fetchES() {
           height: cells[9] ? parseFloat(cells[9]) : null, 
           hmax: cells[10] ? parseFloat(cells[10]) : null, 
           period: cells[8] ? parseFloat(cells[8]) : null, 
-          direction: cells[1] ? parseInt(cells[1]) : 270
+          direction: cells[11] ? parseInt(cells[11]) : (cells[1] ? parseInt(cells[1]) : 270)
         });
       }
 
@@ -186,7 +186,7 @@ async function fetchES() {
     result.height = latestRow[9] ? parseFloat(latestRow[9]) : null;
     result.hmax = latestRow[10] ? parseFloat(latestRow[10]) : null;
     result.waterTemp = latestRow[5] ? parseFloat(latestRow[5]) : null;
-    result.direction = latestWindRow?.[1] ? parseInt(latestWindRow[1]) : 270;
+    result.direction = latestRow[11] ? parseInt(latestRow[11]) : (latestWindRow?.[1] ? parseInt(latestWindRow[1]) : 270);
   }
 
   if (latestWindRow) {

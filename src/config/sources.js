@@ -11,6 +11,7 @@ export const SOURCES = [
   { id: 'propriano', name: 'Propriano', type: 'wunderground', stationId: 'ICORSEPR2', coords: [41.674, 8.899] },
   { id: 'tizzano', name: 'Tizzano', type: 'wunderground', stationId: 'ISARTN1', coords: [41.540, 8.852] },
   { id: 'bonifacio_tramizzi', name: 'Bonifacio Tramizzi', type: 'wunderground', stationId: 'IBONIF6', coords: [41.403, 9.155] },
+  { id: 'ajaccio_buoy', name: "Bouée Golfe d'Ajaccio", type: 'esurfmar', stationId: 'ajaccio', coords: [41.850, 8.650] },
   { id: 'owm-1202', name: 'San Bastianu (OWM)', type: 'owm', pioupiouId: '1202', coords: [42.164, 8.618] }
 ];
 
