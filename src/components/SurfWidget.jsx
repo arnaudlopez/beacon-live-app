@@ -100,13 +100,53 @@ export default function SurfWidget({ surfData, windData }) {
   // Generate surf report
   const report = data ? getSurfReport(data, nearestWind, current.name) : null;
 
+  // Compute "time ago" from last surf measurement
+  const lastMeasurementTime = data?.surfHistory?.length > 0
+    ? data.surfHistory[data.surfHistory.length - 1].time
+    : null;
+
+  const [timeAgo, setTimeAgo] = useState('');
+  useEffect(() => {
+    if (!lastMeasurementTime) { setTimeAgo(''); return; }
+    const compute = () => {
+      const diffMs = Date.now() - lastMeasurementTime;
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) setTimeAgo("à l'instant");
+      else if (diffMin < 60) setTimeAgo(`il y a ${diffMin} min`);
+      else {
+        const h = Math.floor(diffMin / 60);
+        const m = diffMin % 60;
+        setTimeAgo(`il y a ${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`);
+      }
+    };
+    compute();
+    const id = setInterval(compute, 60000);
+    return () => clearInterval(id);
+  }, [lastMeasurementTime]);
+
   return (
     <div className="glass-panel" style={{ marginTop: '2rem', padding: '1.5rem', animation: 'fadeUp 1.1s ease-out' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <h3 className="widget-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
-          <Waves size={20} style={{ color: 'var(--accent-cyan)' }}/> 
-          🏄 Conditions Surf — {current?.name}
-        </h3>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h3 className="widget-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
+            <Waves size={20} style={{ color: 'var(--accent-cyan)' }}/> 
+            🏄 Conditions Surf — {current?.name}
+          </h3>
+          {timeAgo && (
+            <span style={{
+              fontSize: '0.7rem',
+              color: 'var(--text-secondary)',
+              background: 'rgba(255,255,255,0.05)',
+              border: '1px solid var(--border-glass)',
+              padding: '0.2rem 0.5rem',
+              borderRadius: '1rem',
+              whiteSpace: 'nowrap',
+              fontFamily: 'var(--font-heading)',
+            }}>
+              🕐 {timeAgo}
+            </span>
+          )}
+        </div>
         <div className="source-toggle-container" style={{ margin: 0, padding: '0.2rem', gap: '0.4rem' }}>
           {spots.map(s => (
             <button
