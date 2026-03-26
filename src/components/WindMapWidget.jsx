@@ -8,7 +8,7 @@ function MapCenterUpdater({ center }) {
   const map = useMap();
   React.useEffect(() => {
     if (center) {
-      map.flyTo(center, 10, { animate: true, duration: 1.2 });
+      map.flyTo(center, 13, { animate: true, duration: 1.2 });
     }
   }, [center, map]);
   return null;
