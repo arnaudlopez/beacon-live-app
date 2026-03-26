@@ -45,6 +45,31 @@ const SPOT_WIND_MAP = {
 
 export default function SurfWidget({ surfData, windData }) {
   const [activeSpot, setActiveSpot] = useState('revellata');
+  const [timeAgo, setTimeAgo] = useState('');
+
+  // Compute "time ago" — hooks must be before any early return
+  const activeData = surfData?.[activeSpot];
+  const lastMeasurementTime = activeData?.surfHistory?.length > 0
+    ? activeData.surfHistory[activeData.surfHistory.length - 1].time
+    : null;
+
+  useEffect(() => {
+    if (!lastMeasurementTime) { setTimeAgo(''); return; }
+    const compute = () => {
+      const diffMs = Date.now() - lastMeasurementTime;
+      const diffMin = Math.floor(diffMs / 60000);
+      if (diffMin < 1) setTimeAgo("à l'instant");
+      else if (diffMin < 60) setTimeAgo(`il y a ${diffMin} min`);
+      else {
+        const h = Math.floor(diffMin / 60);
+        const m = diffMin % 60;
+        setTimeAgo(`il y a ${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`);
+      }
+    };
+    compute();
+    const id = setInterval(compute, 60000);
+    return () => clearInterval(id);
+  }, [lastMeasurementTime]);
 
   if (!surfData || (!surfData.revellata && !surfData.ajaccio && !surfData.bonifacio)) return null;
 
@@ -99,30 +124,6 @@ export default function SurfWidget({ surfData, windData }) {
   
   // Generate surf report
   const report = data ? getSurfReport(data, nearestWind, current.name) : null;
-
-  // Compute "time ago" from last surf measurement
-  const lastMeasurementTime = data?.surfHistory?.length > 0
-    ? data.surfHistory[data.surfHistory.length - 1].time
-    : null;
-
-  const [timeAgo, setTimeAgo] = useState('');
-  useEffect(() => {
-    if (!lastMeasurementTime) { setTimeAgo(''); return; }
-    const compute = () => {
-      const diffMs = Date.now() - lastMeasurementTime;
-      const diffMin = Math.floor(diffMs / 60000);
-      if (diffMin < 1) setTimeAgo("à l'instant");
-      else if (diffMin < 60) setTimeAgo(`il y a ${diffMin} min`);
-      else {
-        const h = Math.floor(diffMin / 60);
-        const m = diffMin % 60;
-        setTimeAgo(`il y a ${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`);
-      }
-    };
-    compute();
-    const id = setInterval(compute, 60000);
-    return () => clearInterval(id);
-  }, [lastMeasurementTime]);
 
   return (
     <div className="glass-panel" style={{ marginTop: '2rem', padding: '1.5rem', animation: 'fadeUp 1.1s ease-out' }}>
