@@ -68,6 +68,9 @@ export function useNotifications(allWindData) {
       }
       const perm = await Notification.requestPermission();
       if (perm === 'granted') {
+        // Reset tracking so first data check fires immediately if conditions met
+        delete previousValues.current[sourceId];
+        delete lastNotificationTimes.current[sourceId];
         update(sourceId, { enabled: true });
         const parts = [];
         if (current.avgEnabled) parts.push(`moy ≥ ${current.avgThreshold} kts`);
