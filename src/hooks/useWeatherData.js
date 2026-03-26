@@ -23,8 +23,8 @@ const MARINE_POLL_MS = 120_000;
 
 // Map edge function source keys → app source IDs
 const WIND_SOURCE_MAP = {
-  'ajaccio-orbo': 'meteofrance_20004002',
-  'ajaccio-parata': 'meteofrance_20004003',
+  'lfkj': 'meteofrance_20004002',
+  'la_parata': 'meteofrance_20004003',
   'porticcio': 'windsup_porticcio',
   'porticcio_haut': 'wunderground_IGROSS105',
   'mezzavia': 'wunderground_ISARROLA7',
