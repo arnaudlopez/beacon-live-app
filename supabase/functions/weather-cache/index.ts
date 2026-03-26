@@ -316,6 +316,13 @@ Deno.serve(async (req: Request) => {
           const lastObs = hist[hist.length - 1];
           if (lastObs && lastObs.time) { if (now - new Date(lastObs.time).getTime() > 15 * 60 * 1000) ttl = 30 * 1000; }
         }
+        if (s === 'esurfmar_ajaccio' && e.data && (e.data as any).surfHistory && (e.data as any).surfHistory.length > 0) {
+          const hist = (e.data as any).surfHistory;
+          const lastObs = hist[hist.length - 1];
+          if (lastObs && lastObs.time) { 
+            if (now - new Date(lastObs.time).getTime() > 30 * 60 * 1000) ttl = 2 * 60 * 1000; 
+          }
+        }
         const age = now - new Date(e.fetched_at).getTime();
         if (age < ttl) { res[s] = e.data; return; }
       }
