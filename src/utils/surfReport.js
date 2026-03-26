@@ -28,8 +28,14 @@ export function getSurfReport(surf, wind, spotName) {
   let windRelation = 'calme';
   let windEmoji = '🍃';
 
-  if (!isNaN(windDir) && !isNaN(swellDir) && windKts > 2) {
-    const diff = Math.abs(((windDir - swellDir + 540) % 360) - 180);
+  // Default to WSW (255°) if swellDir is missing, realistic for West Corsica swells
+  const effectiveSwellDir = !isNaN(swellDir) ? swellDir : 255;
+
+  if (windKts <= 2) {
+    windRelation = 'calme';
+    windEmoji = '🪞';
+  } else if (!isNaN(windDir)) {
+    const diff = Math.abs(((windDir - effectiveSwellDir + 540) % 360) - 180);
     if (diff >= 135) {
       windRelation = 'offshore';
       windEmoji = '✨';
@@ -40,9 +46,9 @@ export function getSurfReport(surf, wind, spotName) {
       windRelation = 'onshore';
       windEmoji = '💨';
     }
-  } else if (windKts <= 2) {
-    windRelation = 'calme';
-    windEmoji = '🪞';
+  } else {
+    windRelation = 'unknown';
+    windEmoji = '💨';
   }
 
   // --- Wave set estimation ---
@@ -75,8 +81,10 @@ export function getSurfReport(surf, wind, spotName) {
     detail = `Vent offshore de ${windCardinal} (${windKts}-${gustKts} kts), conditions propres !`;
   } else if (windRelation === 'cross-shore') {
     detail = `Vent cross-shore de ${windCardinal} (${windKts}-${gustKts} kts), conditions acceptables.`;
-  } else {
+  } else if (windRelation === 'onshore') {
     detail = `Vent onshore de ${windCardinal} (${windKts}-${gustKts} kts), plan d'eau hachuré.`;
+  } else {
+    detail = `Vent fort de ${windKts}-${gustKts} kts, plan d'eau agité.`;
   }
 
   // --- Verdict ---

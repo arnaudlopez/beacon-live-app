@@ -186,7 +186,7 @@ async function fetchES() {
     result.height = latestRow[9] ? parseFloat(latestRow[9]) : null;
     result.hmax = latestRow[10] ? parseFloat(latestRow[10]) : null;
     result.waterTemp = latestRow[5] ? parseFloat(latestRow[5]) : null;
-    result.direction = latestWindRow?.[1] ? parseInt(latestWindRow[1]) : 270;
+    result.direction = null; // Removed fake coupling to wind direction
   }
 
   if (latestWindRow) {
