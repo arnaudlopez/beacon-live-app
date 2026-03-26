@@ -220,6 +220,7 @@ export default function HistoricalChart({ data }) {
                 minTickGap={30}
               />
               <YAxis 
+                yAxisId="dir"
                 domain={[0, 360]}
                 ticks={cardinalTicks}
                 tickFormatter={(val) => cardinalLabels[val] || `${val}°`}
@@ -227,9 +228,10 @@ export default function HistoricalChart({ data }) {
                 fontSize={12}
                 width={30}
               />
-              <YAxis orientation="right" width={30} tick={false} axisLine={false} />
+              <YAxis yAxisId="dirR" orientation="right" width={30} tick={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} />
               <Line
+                yAxisId="dir"
                 type="stepAfter"
                 dataKey="windDirection"
                 name="Direction"
@@ -240,9 +242,30 @@ export default function HistoricalChart({ data }) {
                 connectNulls={true}
               />
               <Scatter
+                yAxisId="dir"
                 dataKey="windDirection"
                 name="Direction"
-                shape={<DirectionDot />}
+                fill="var(--accent-cyan)"
+                shape={(props) => {
+                  const { cx, cy, payload } = props;
+                  if (payload.windDirection === null || payload.windDirection === undefined) return null;
+                  const rad = (payload.windDirection * Math.PI) / 180;
+                  const size = 7;
+                  const tipX = cx + Math.sin(rad) * size;
+                  const tipY = cy - Math.cos(rad) * size;
+                  const leftX = cx + Math.sin(rad - 2.5) * size * 0.6;
+                  const leftY = cy - Math.cos(rad - 2.5) * size * 0.6;
+                  const rightX = cx + Math.sin(rad + 2.5) * size * 0.6;
+                  const rightY = cy - Math.cos(rad + 2.5) * size * 0.6;
+                  return (
+                    <polygon
+                      points={`${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`}
+                      fill="var(--accent-cyan)"
+                      opacity={0.7}
+                    />
+                  );
+                }}
+                strokeOpacity={0.6}
               />
             </ComposedChart>
           </ResponsiveContainer>
