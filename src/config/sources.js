@@ -6,7 +6,8 @@ export const SOURCES = [
   { id: 'lfkj', name: "Ajaccio - Campo dell'Oro", type: 'meteofrance', stationId: '20004002', coords: [41.923, 8.802] },
   { id: 'la_parata', name: 'Ajaccio - La Parata', type: 'meteofrance', stationId: '20004003', coords: [41.908, 8.618] },
   { id: 'owm-1202', name: 'San Bastianu (OWM)', type: 'owm', pioupiouId: '1202', coords: [42.164, 8.618] },
-  { id: 'porticcio', name: 'Porticcio', type: 'windsup', stationId: '1726', coords: [41.868, 8.787] }
+  { id: 'porticcio', name: 'Porticcio', type: 'windsup', stationId: '1726', coords: [41.868, 8.787] },
+  { id: 'porticcio_haut', name: 'Porticcio Haut', type: 'wunderground', stationId: 'IGROSS105', coords: [41.903, 8.828] }
 ];
 
 export const CANDHIS_STATIONS = {
