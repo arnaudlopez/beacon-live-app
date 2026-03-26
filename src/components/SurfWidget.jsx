@@ -39,7 +39,7 @@ function SwellAnimation({ direction, coords, delay = 0, scale = 1 }) {
 // Map spot ID → nearest wind source ID
 const SPOT_WIND_MAP = {
   revellata: 'la_parata',       // La Parata is closest MF station
-  ajaccio: 'lfkj',             // Campo dell'Oro for Golfe d'Ajaccio
+  ajaccio: 'ajaccio_buoy',      // Uses its own buoy data for precise offshore conditions
   bonifacio: 'lfkj',           // Fallback to Campo dell'Oro
 };
 
