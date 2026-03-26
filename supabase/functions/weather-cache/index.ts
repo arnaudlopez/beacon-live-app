@@ -317,11 +317,17 @@ Deno.serve(async (req: Request) => {
           const lastObs = hist[hist.length - 1];
           if (lastObs && lastObs.time) { if (now - new Date(lastObs.time).getTime() > 15 * 60 * 1000) ttl = 30 * 1000; }
         }
-        if (s.startsWith('esurfmar_') && e.data && (e.data as any).surfHistory && (e.data as any).surfHistory.length > 0) {
-          const hist = (e.data as any).surfHistory;
+        if (s.startsWith('esurfmar_') && e.data && (e.data as any).history && (e.data as any).history.length > 0) {
+          const hist = (e.data as any).history;
           const lastObs = hist[hist.length - 1];
           if (lastObs && lastObs.time) { 
-            if (now - new Date(lastObs.time).getTime() > 30 * 60 * 1000) ttl = 2 * 60 * 1000; 
+            const obsDate = new Date(lastObs.time);
+            const nextExpectedTime = Date.UTC(obsDate.getUTCFullYear(), obsDate.getUTCMonth(), obsDate.getUTCDate(), obsDate.getUTCHours() + 1, 31, 0);
+            if (now < nextExpectedTime) {
+              ttl = nextExpectedTime - now;
+            } else {
+              ttl = 2 * 60 * 1000;
+            }
           }
         }
         const age = now - new Date(e.fetched_at).getTime();
