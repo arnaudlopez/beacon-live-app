@@ -25,13 +25,13 @@ const MARINE_POLL_MS = 120_000;
 const WIND_SOURCE_MAP = {
   'ajaccio-orbo': 'meteofrance_20004002',
   'ajaccio-parata': 'meteofrance_20004003',
-  'owm-1202': 'pioupiou_1202',
   'porticcio': 'windsup_porticcio',
   'porticcio_haut': 'wunderground_IGROSS105',
   'mezzavia': 'wunderground_ISARROLA7',
   'propriano': 'wunderground_ICORSEPR2',
   'tizzano': 'wunderground_ISARTN1',
-  'bonifacio_tramizzi': 'wunderground_IBONIF6'
+  'bonifacio_tramizzi': 'wunderground_IBONIF6',
+  'owm-1202': 'pioupiou_1202'
 };
 
 const WIND_EDGE_KEYS = Object.values(WIND_SOURCE_MAP);
