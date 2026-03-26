@@ -10,7 +10,8 @@ export const SOURCES = [
   { id: 'porticcio_haut', name: 'Nebbiajo', type: 'wunderground', stationId: 'IGROSS105', coords: [41.903, 8.828] },
   { id: 'mezzavia', name: 'Mezzavia', type: 'wunderground', stationId: 'ISARROLA7', coords: [41.951, 8.787] },
   { id: 'propriano', name: 'Propriano', type: 'wunderground', stationId: 'ICORSEPR2', coords: [41.674, 8.899] },
-  { id: 'tizzano', name: 'Tizzano', type: 'wunderground', stationId: 'ISARTN1', coords: [41.540, 8.852] }
+  { id: 'tizzano', name: 'Tizzano', type: 'wunderground', stationId: 'ISARTN1', coords: [41.540, 8.852] },
+  { id: 'bonifacio_tramizzi', name: 'Bonifacio Tramizzi', type: 'wunderground', stationId: 'IBONIF6', coords: [41.403, 9.155] }
 ];
 
 export const CANDHIS_STATIONS = {

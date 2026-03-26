@@ -30,7 +30,8 @@ const WIND_SOURCE_MAP = {
   'porticcio_haut': 'wunderground_IGROSS105',
   'mezzavia': 'wunderground_ISARROLA7',
   'propriano': 'wunderground_ICORSEPR2',
-  'tizzano': 'wunderground_ISARTN1'
+  'tizzano': 'wunderground_ISARTN1',
+  'bonifacio_tramizzi': 'wunderground_IBONIF6'
 };
 
 const WIND_EDGE_KEYS = Object.values(WIND_SOURCE_MAP);
