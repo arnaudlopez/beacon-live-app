@@ -44,7 +44,7 @@ const SPOT_WIND_MAP = {
 };
 
 export default function SurfWidget({ surfData, windData }) {
-  const [activeSpot, setActiveSpot] = useState('revellata');
+  const [activeSpot, setActiveSpot] = useState('ajaccio');
   const [timeAgo, setTimeAgo] = useState('');
 
   // Compute "time ago" — hooks must be before any early return
@@ -75,19 +75,6 @@ export default function SurfWidget({ surfData, windData }) {
 
   const spots = [
     { 
-      id: 'revellata', name: 'La Revellata', coords: [42.569, 8.650], code: '02B04', data: surfData.revellata,
-      wavePoints: [
-        { c: [42.569, 8.650], d: 0,   s: 1.1 },
-        { c: [42.569, 8.500], d: 0.4, s: 0.9 }, // W
-        { c: [42.620, 8.550], d: 0.8, s: 0.8 }, // NW
-        { c: [42.510, 8.520], d: 1.2, s: 1.0 }, // SW
-        { c: [42.650, 8.600], d: 0.3, s: 0.85 }, // N
-        { c: [42.550, 8.400], d: 0.7, s: 0.7 }, // Far W
-        { c: [42.450, 8.450], d: 1.5, s: 0.9 }, // Far SW
-        { c: [42.520, 8.610], d: 1.1, s: 0.75 } // Close SW
-      ]
-    },
-    { 
       id: 'ajaccio', name: "Golfe d'Ajaccio", coords: [41.750, 7.580], code: 'Ajaccio', data: surfData.ajaccio,
       wavePoints: [
         { c: [41.750, 7.580], d: 0,   s: 1.1 },
@@ -98,6 +85,19 @@ export default function SurfWidget({ surfData, windData }) {
         { c: [41.600, 7.350], d: 1.4, s: 0.85 }, // Far SW
         { c: [41.550, 7.450], d: 0.9, s: 0.9 }, // Far S
         { c: [41.700, 7.300], d: 0.2, s: 0.8 } // Far W
+      ]
+    },
+    { 
+      id: 'revellata', name: 'La Revellata', coords: [42.569, 8.650], code: '02B04', data: surfData.revellata,
+      wavePoints: [
+        { c: [42.569, 8.650], d: 0,   s: 1.1 },
+        { c: [42.569, 8.500], d: 0.4, s: 0.9 }, // W
+        { c: [42.620, 8.550], d: 0.8, s: 0.8 }, // NW
+        { c: [42.510, 8.520], d: 1.2, s: 1.0 }, // SW
+        { c: [42.650, 8.600], d: 0.3, s: 0.85 }, // N
+        { c: [42.550, 8.400], d: 0.7, s: 0.7 }, // Far W
+        { c: [42.450, 8.450], d: 1.5, s: 0.9 }, // Far SW
+        { c: [42.520, 8.610], d: 1.1, s: 0.75 } // Close SW
       ]
     },
     { 
