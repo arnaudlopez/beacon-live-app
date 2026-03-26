@@ -32,6 +32,7 @@ const WIND_SOURCE_MAP = {
   'tizzano': 'wunderground_ISARTN1',
   'bonifacio_tramizzi': 'wunderground_IBONIF6',
   'ajaccio_buoy': 'esurfmar_ajaccio',
+  'calvi_buoy': 'esurfmar_calvi',
   'owm-1202': 'pioupiou_1202'
 };
 
