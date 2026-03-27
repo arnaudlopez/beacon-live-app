@@ -16,6 +16,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 function getCacheTTL(source: string): number {
   if (source === 'wunderground_ICORSEPR2') return CACHE_TTL_WU_SLOW;
+  if (source === 'windsup_porticcio') return CACHE_TTL_WU_FAST; // 30s
   return source.startsWith('wunderground_') ? CACHE_TTL_WU_FAST : CACHE_TTL_DEFAULT;
 }
 
