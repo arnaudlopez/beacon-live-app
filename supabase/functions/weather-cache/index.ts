@@ -217,8 +217,8 @@ async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
   const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
   try {
-    // Login via mobile site (different fields than desktop)
-    const mobileBase = WINDSUP_PROXY ? WINDSUP_PROXY.replace("www.", "m.") : "https://m.winds-up.com";
+    // Login via mobile site (different auth fields, full premium data available)
+    const mobileBase = "https://m.winds-up.com";
     const authRes = await fetch(`${mobileBase}/index.php`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
