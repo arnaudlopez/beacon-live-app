@@ -234,9 +234,10 @@ async function fetchWindsUp(sid: string) {
       const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*o:"([^"]*)"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
       const points: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
       let match; while ((match = chartRegex.exec(html)) !== null) {
-        if (match[0].includes('abo:"no"')) continue;
         const fakeTs = parseInt(match[1]); const tzOffset = getParisOffsetMs(fakeTs); const realTs = fakeTs - tzOffset;
-        const avg = parseFloat(match[2]); const oField = match[3]; const max = match[5] ? parseFloat(match[5]) : avg;
+        const avg = parseFloat(match[2]); const oField = match[3];
+        const rawMax = match[5] ? parseFloat(match[5]) : 0;
+        const max = rawMax > 0 ? rawMax : avg; // abo:"no" points have max:"0", fall back to avg
         const localDate = new Date(fakeTs); const minuteKey = `${String(localDate.getUTCHours()).padStart(2,'0')}:${String(localDate.getUTCMinutes()).padStart(2,'0')}`;
         let dir: number | null = null; const tableDeg = tableDegMap.get(minuteKey);
         if (tableDeg !== undefined) dir = tableDeg; else if (oField && degMap[oField] !== undefined) dir = degMap[oField];
