@@ -215,43 +215,74 @@ function getParisOffsetMs(_ts: number) {
 
 async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
-  const baseHost = WINDSUP_PROXY || "https://www.winds-up.com";
+  const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
   try {
-    const authRes = await fetch(`${baseHost}/index.php`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `login_pseudo=${encodeURIComponent(WINDSUP_USER)}&login_passwd=${encodeURIComponent(WINDSUP_PASS)}&action=post_login`, redirect: "manual" });
+    // Login via mobile site (different fields than desktop)
+    const mobileBase = WINDSUP_PROXY ? WINDSUP_PROXY.replace("www.", "m.") : "https://m.winds-up.com";
+    const authRes = await fetch(`${mobileBase}/index.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `action=log&pseudo=${encodeURIComponent(WINDSUP_USER)}&password=${encodeURIComponent(WINDSUP_PASS)}&submit=submit-value`,
+      redirect: "manual"
+    });
     const cookieHeader = authRes.headers.get("set-cookie") || "";
-    const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/); if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
-    const c = `PHPSESSID=${sidMatch[1]}`;
-    const baseUrl = `${baseHost}/spot-${sid}-observations-releves-vent.html`;
+    const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/);
+    if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
+    const cookies: string[] = [`PHPSESSID=${sidMatch[1]}`];
+    // Capture autolog + codeCnx cookies too
+    const autolog = cookieHeader.match(/autolog=([^;]+)/);
+    const codeCnx = cookieHeader.match(/codeCnx=([^;]+)/);
+    if (autolog) cookies.push(`autolog=${autolog[1]}`);
+    if (codeCnx) cookies.push(`codeCnx=${codeCnx[1]}`);
+    const c = cookies.join("; ");
+
+    // Helper: parse moy + minmax series from a mobile page
+    function parseMobilePage(html: string) {
+      const moyRegex = /\{x:(\d{13}),y:(\d+),o:"([^"]*)",color:"([^"]*)",img:"[^"]*",?\}/g;
+      const minmaxRegex = /\{x:(\d{13}),low:(\d+),high:(\d+),?\}/g;
+      const moyMap = new Map<number, {avg: number, dir: number|null}>();
+      const mmMap = new Map<number, number>(); // realTs → high (gust)
+      let m;
+      while ((m = moyRegex.exec(html)) !== null) {
+        const realTs = parseInt(m[1]) - getParisOffsetMs(parseInt(m[1]));
+        const dir = m[3] && degMap[m[3]] !== undefined ? degMap[m[3]] : null;
+        moyMap.set(realTs, { avg: parseInt(m[2]), dir });
+      }
+      while ((m = minmaxRegex.exec(html)) !== null) {
+        const realTs = parseInt(m[1]) - getParisOffsetMs(parseInt(m[1]));
+        mmMap.set(realTs, parseInt(m[3])); // high = gust
+      }
+      const pts: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
+      for (const [ts, moy] of moyMap) {
+        pts.push({ time: ts, avgSpeed: moy.avg, maxGust: mmMap.get(ts) ?? moy.avg, temperature: null, windDirection: moy.dir });
+      }
+      return pts;
+    }
+
+    // Fetch today + yesterday for 48h history
     const yesterday = new Date(Date.now() - 24 * 3600000);
     const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
-    const [rToday, rYesterday] = await Promise.all([ fetch(baseUrl, { headers: { "Cookie": c } }), fetch(`${baseUrl}?date=${yStr}`, { headers: { "Cookie": c } }) ]);
-    const htmlToday = await rToday.text(); const htmlYesterday = await rYesterday.text();
-    const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
-    function parseWindsUpPage(html: string) {
-      const tableDegMap = new Map<string, number>();
-      const tableRowRegex = /- (\d{2}:\d{2})<\/td>\s*<td[^>]*>.*?(\d{1,3})\u00b0/g;
-      let tableMatch; while ((tableMatch = tableRowRegex.exec(html)) !== null) { if (!tableDegMap.has(tableMatch[1])) tableDegMap.set(tableMatch[1], parseInt(tableMatch[2])); }
-      const chartRegex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*o:"([^"]*)"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
-      const points: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
-      let match; while ((match = chartRegex.exec(html)) !== null) {
-        const fakeTs = parseInt(match[1]); const tzOffset = getParisOffsetMs(fakeTs); const realTs = fakeTs - tzOffset;
-        const avg = parseFloat(match[2]); const oField = match[3];
-        const rawMax = match[5] ? parseFloat(match[5]) : 0;
-        const max = rawMax > 0 ? rawMax : avg; // abo:"no" points have max:"0", fall back to avg
-        const localDate = new Date(fakeTs); const minuteKey = `${String(localDate.getUTCHours()).padStart(2,'0')}:${String(localDate.getUTCMinutes()).padStart(2,'0')}`;
-        let dir: number | null = null; const tableDeg = tableDegMap.get(minuteKey);
-        if (tableDeg !== undefined) dir = tableDeg; else if (oField && degMap[oField] !== undefined) dir = degMap[oField];
-        points.push({ time: realTs, avgSpeed: Number(avg.toFixed(1)), maxGust: Number(max.toFixed(1)), temperature: null, windDirection: dir });
-      }
-      return points;
+    const [rToday, rYesterday] = await Promise.all([
+      fetch(`${mobileBase}/spot/${sid}`, { headers: { "Cookie": c } }),
+      fetch(`${mobileBase}/spot/${sid}?date=${yStr}`, { headers: { "Cookie": c } })
+    ]);
+    const todayPts = parseMobilePage(await rToday.text());
+    const yesterdayPts = parseMobilePage(await rYesterday.text());
+
+    // Merge & deduplicate
+    const seen = new Set<number>();
+    const history: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
+    for (const p of [...yesterdayPts, ...todayPts]) {
+      if (!seen.has(p.time)) { seen.add(p.time); history.push(p); }
     }
-    const yesterdayPoints = parseWindsUpPage(htmlYesterday); const todayPoints = parseWindsUpPage(htmlToday);
-    const seen = new Set<number>(); const history = [];
-    for (const p of [...yesterdayPoints, ...todayPoints]) { if (!seen.has(p.time)) { seen.add(p.time); history.push(p); } }
     history.sort((a, b) => a.time - b.time);
+
     if (history.length === 0) return null;
     const live = history[history.length - 1];
-    return { live: { windSpeed: live.avgSpeed, windGust: live.maxGust, windDirection: live.windDirection, temperature: null, humidity: null, pressure: null }, history };
+    return {
+      live: { windSpeed: live.avgSpeed, windGust: live.maxGust, windDirection: live.windDirection, temperature: null, humidity: null, pressure: null },
+      history
+    };
   } catch (e) { console.error("WindsUp err:", e); return null; }
 }
 
@@ -290,7 +321,7 @@ const SF: Record<string, F> = {
   candhis_bonifacio: () => fetchCD("Y2FtcD0wMkEwMQ=="),
   esurfmar_ajaccio: () => fetchES("ajaccio"),
   esurfmar_calvi: () => fetchES("calvi"),
-  windsup_porticcio: () => fetchWindsUp("porticcio--windsurf-kitesurf-1726"),
+  windsup_porticcio: () => fetchWindsUp("1726"),
   wunderground_IGROSS105: () => fetchWU("IGROSS105"),
   wunderground_ISARROLA7: () => fetchWU("ISARROLA7"),
   wunderground_ICORSEPR2: () => fetchWU("ICORSEPR2"),
