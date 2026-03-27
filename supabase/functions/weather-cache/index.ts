@@ -6,6 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
+const WINDSUP_PROXY = Deno.env.get("WINDSUP_PROXY")||""; // e.g. https://ajaccio.surf/proxy/windsup
 
 const WU_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525";
 
@@ -214,12 +215,13 @@ function getParisOffsetMs(_ts: number) {
 
 async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
+  const baseHost = WINDSUP_PROXY || "https://www.winds-up.com";
   try {
-    const authRes = await fetch("https://www.winds-up.com/index.php", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `login_pseudo=${encodeURIComponent(WINDSUP_USER)}&login_passwd=${encodeURIComponent(WINDSUP_PASS)}&action=post_login`, redirect: "manual" });
+    const authRes = await fetch(`${baseHost}/index.php`, { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: `login_pseudo=${encodeURIComponent(WINDSUP_USER)}&login_passwd=${encodeURIComponent(WINDSUP_PASS)}&action=post_login`, redirect: "manual" });
     const cookieHeader = authRes.headers.get("set-cookie") || "";
     const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/); if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
     const c = `PHPSESSID=${sidMatch[1]}`;
-    const baseUrl = `https://www.winds-up.com/spot-${sid}-observations-releves-vent.html`;
+    const baseUrl = `${baseHost}/spot-${sid}-observations-releves-vent.html`;
     const yesterday = new Date(Date.now() - 24 * 3600000);
     const yStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth()+1).padStart(2,'0')}-${String(yesterday.getDate()).padStart(2,'0')}`;
     const [rToday, rYesterday] = await Promise.all([ fetch(baseUrl, { headers: { "Cookie": c } }), fetch(`${baseUrl}?date=${yStr}`, { headers: { "Cookie": c } }) ]);
