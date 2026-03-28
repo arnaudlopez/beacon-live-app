@@ -2,6 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 /**
+ * @typedef {import('../types').AllWindData} AllWindData
+ * @typedef {import('../types').AllSurfData} AllSurfData
+ * @typedef {import('../types').WaterData} WaterData
+ */
+
+/**
  * Hybrid data hook: initial fetch via Edge Function + Supabase Realtime push.
  * 
  * Flow:
@@ -31,6 +37,7 @@ const WIND_SOURCE_MAP = {
   'propriano': 'wunderground_ICORSEPR2',
   'tizzano': 'wunderground_ISARTN1',
   'bonifacio_tramizzi': 'wunderground_IBONIF6',
+  'la_tonnara': 'windsup_tonnara',
   'ajaccio_buoy': 'esurfmar_ajaccio',
   'calvi_buoy': 'esurfmar_calvi',
   'owm-1202': 'pioupiou_1202'

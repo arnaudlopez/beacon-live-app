@@ -98,7 +98,7 @@ export default function HistoricalChart({ data }) {
   ];
 
   return (
-    <div className="glass-panel historical-chart-container" style={{ height: hasDirection ? '620px' : '480px' }}>
+    <div className="glass-panel historical-chart-container">
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h3 className="widget-title" style={{ margin: 0 }}>📈 Historique Vent & Météo</h3>
@@ -118,7 +118,7 @@ export default function HistoricalChart({ data }) {
       </div>
 
       {/* Wind Speed & Temperature Chart */}
-      <ResponsiveContainer width="100%" height={hasDirection ? '55%' : '100%'}>
+      <ResponsiveContainer width="100%" height={hasDirection ? 320 : 420} minWidth={0}>
         <ComposedChart data={filteredData} margin={{ top: 10, right: 5, left: 5, bottom: 0 }}>
           <defs>
             <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
@@ -208,7 +208,7 @@ export default function HistoricalChart({ data }) {
       {hasDirection && (
         <>
           <h3 className="widget-title" style={{ margin: '0.8rem 0 0.3rem', fontSize: '0.8rem' }}>🧭 Direction du vent</h3>
-          <ResponsiveContainer width="100%" height="35%">
+          <ResponsiveContainer width="100%" height={200} minWidth={0}>
             <ComposedChart data={filteredData} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis 

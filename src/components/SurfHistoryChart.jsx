@@ -54,7 +54,7 @@ export default function SurfHistoryChart({ data }) {
       <h4 className="widget-title" style={{ fontSize: '0.85rem', margin: '0 0 0.5rem' }}>
         📈 Historique Houle (12h)
       </h4>
-      <ResponsiveContainer width="100%" height={220}>
+      <ResponsiveContainer width="100%" height={220} minWidth={0}>
         <ComposedChart data={filtered} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
           <defs>
             <linearGradient id="colorHeight" x1="0" y1="0" x2="0" y2="1">
