@@ -82,7 +82,7 @@ export function useNotifications(allWindData) {
         if (current.gustEnabled) parts.push(`raf ≥ ${current.gustThreshold} kts`);
         sendNotification('Alertes Activées 🌬️', {
           body: `${sourceName} — ${parts.join(' ET ')}`,
-          icon: '/favicon.svg'
+          icon: '/icon-192.png'
         });
       } else {
         alert('Veuillez autoriser les notifications dans les paramètres de votre navigateur.');
@@ -143,7 +143,7 @@ export function useNotifications(allWindData) {
 
         sendNotification(`⚠️ Alerte ${source.name}`, {
           body: parts.join(' · '),
-          icon: '/favicon.svg',
+          icon: '/icon-192.png',
           tag: `alert-${source.id}`
         });
         lastNotificationTimes.current[source.id] = now;
