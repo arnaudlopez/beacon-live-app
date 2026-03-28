@@ -217,17 +217,19 @@ async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
   const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
   try {
-    // Login via mobile site, routed through residential proxy to bypass IP blocking
-    const mobileBase = WINDSUP_PROXY || "https://m.winds-up.com";
+    // Direct to mobile site - confirmed working from Supabase Edge Functions
+    const mobileBase = "https://m.winds-up.com";
+    console.log(`WindsUp: using base=${mobileBase}, proxy_env=${WINDSUP_PROXY ? 'SET' : 'EMPTY'}`);
     const authRes = await fetch(`${mobileBase}/index.php`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `action=log&pseudo=${encodeURIComponent(WINDSUP_USER)}&password=${encodeURIComponent(WINDSUP_PASS)}&submit=submit-value`,
       redirect: "manual"
     });
+    console.log(`WindsUp: auth status=${authRes.status}`);
     const cookieHeader = authRes.headers.get("set-cookie") || "";
     const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/);
-    if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
+    if (!sidMatch) { console.error("WindsUp: No PHPSESSID, cookie header:", cookieHeader.substring(0, 200)); return null; }
     const cookies: string[] = [`PHPSESSID=${sidMatch[1]}`];
     // Capture autolog + codeCnx cookies too
     const autolog = cookieHeader.match(/autolog=([^;]+)/);
@@ -244,13 +246,13 @@ async function fetchWindsUp(sid: string) {
       const mmMap = new Map<number, number>(); // realTs → high (gust)
       let m;
       while ((m = moyRegex.exec(html)) !== null) {
-        const realTs = parseInt(m[1]) - getParisOffsetMs(parseInt(m[1]));
+        const ts = parseInt(m[1]); // Mobile site timestamps are already UTC
         const dir = m[3] && degMap[m[3]] !== undefined ? degMap[m[3]] : null;
-        moyMap.set(realTs, { avg: parseInt(m[2]), dir });
+        moyMap.set(ts, { avg: parseInt(m[2]), dir });
       }
       while ((m = minmaxRegex.exec(html)) !== null) {
-        const realTs = parseInt(m[1]) - getParisOffsetMs(parseInt(m[1]));
-        mmMap.set(realTs, parseInt(m[3])); // high = gust
+        const ts = parseInt(m[1]); // Mobile site timestamps are already UTC
+        mmMap.set(ts, parseInt(m[3])); // high = gust
       }
       const pts: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
       for (const [ts, moy] of moyMap) {
@@ -277,8 +279,9 @@ async function fetchWindsUp(sid: string) {
     }
     history.sort((a, b) => a.time - b.time);
 
-    if (history.length === 0) return null;
+    if (history.length === 0) { console.error("WindsUp: 0 history points"); return null; }
     const live = history[history.length - 1];
+    console.log(`WindsUp: ${history.length} pts, last=${new Date(live.time).toISOString()}, todayPts=${todayPts.length}, yPts=${yesterdayPts.length}`);
     return {
       live: { windSpeed: live.avgSpeed, windGust: live.maxGust, windDirection: live.windDirection, temperature: null, humidity: null, pressure: null },
       history
