@@ -62,7 +62,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
 
   // Speed color based on wind intensity
   const speed = parseFloat(data.windSpeed) || 0;
-  const speedColor = speed >= 20 ? '#ef4444' : speed >= 12 ? '#f59e0b' : speed >= 5 ? '#22c55e' : 'rgba(255,255,255,0.85)';
+  const speedColor = speed >= 20 ? '#ef4444' : speed >= 12 ? '#f59e0b' : 'rgba(255,255,255,0.85)';
 
   if (compact) {
     // Compact mode: small pill with speed + arrow only
