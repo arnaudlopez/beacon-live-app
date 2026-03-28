@@ -264,7 +264,7 @@ async function fetchWindsUp(sid: string) {
         const month = utcDate.getUTCMonth();
         const offsetH = (month >= 3 && month <= 8) ? 2 : 1;
         const localH = (utcDate.getUTCHours() + offsetH) % 24;
-        const hhmm = `${localH}:${String(utcDate.getUTCMinutes()).padStart(2, '0')}`;
+        const hhmm = `${String(localH).padStart(2, '0')}:${String(utcDate.getUTCMinutes()).padStart(2, '0')}`;
         const dir = degByTime.get(hhmm) ?? (cardinalMap[moy.cardinal] !== undefined ? cardinalMap[moy.cardinal] : null);
         pts.push({ time: ts, avgSpeed: moy.avg, maxGust: mmMap.get(ts) ?? moy.avg, temperature: null, windDirection: dir });
       }
