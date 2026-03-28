@@ -7,7 +7,7 @@ const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
 
-const WU_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525";
+const WU_API_KEY = Deno.env.get("WU_API_KEY") || "";
 
 const CACHE_TTL_DEFAULT = 3 * 60 * 1000; // 3 min
 const CACHE_TTL_WU_FAST = 30 * 1000;     // 30s for Wunderground (Fast update stations)
@@ -16,7 +16,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
 function getCacheTTL(source: string): number {
   if (source === 'wunderground_ICORSEPR2') return CACHE_TTL_WU_SLOW;
-  if (source === 'windsup_porticcio') return CACHE_TTL_WU_FAST; // 30s
+  if (source.startsWith('windsup_')) return CACHE_TTL_WU_FAST; // 30s
   return source.startsWith('wunderground_') ? CACHE_TTL_WU_FAST : CACHE_TTL_DEFAULT;
 }
 
@@ -335,6 +335,7 @@ const SF: Record<string, F> = {
   esurfmar_ajaccio: () => fetchES("ajaccio"),
   esurfmar_calvi: () => fetchES("calvi"),
   windsup_porticcio: () => fetchWindsUp("1726"),
+  windsup_tonnara: () => fetchWindsUp("51"),
   wunderground_IGROSS105: () => fetchWU("IGROSS105"),
   wunderground_ISARROLA7: () => fetchWU("ISARROLA7"),
   wunderground_ICORSEPR2: () => fetchWU("ICORSEPR2"),

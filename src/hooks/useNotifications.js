@@ -1,6 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { SOURCES, NOTIF_COOLDOWN } from '../config/sources';
 
+/**
+ * @typedef {import('../types').NotificationSettings} NotificationSettings
+ * @typedef {import('../types').AllWindData} AllWindData
+ */
+
 const STORAGE_KEY = 'beacon_notification_settings_v2';
 
 const DEFAULT_SETTINGS = { enabled: false, avgEnabled: false, avgThreshold: 10, gustEnabled: true, gustThreshold: 15 };
@@ -87,58 +92,65 @@ export function useNotifications(allWindData) {
     }
   }, [settings, update]);
 
-  // Monitor threshold crossings
+  // Monitor threshold crossings (debounced to avoid unnecessary work)
+  const checkTimerRef = useRef(null);
   useEffect(() => {
     if (!allWindData || Object.keys(allWindData).length === 0) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
 
-    const now = Date.now();
-    SOURCES.forEach(source => {
-      const s = settings[source.id];
-      if (!s || !s.enabled) return;
-      if (!s.avgEnabled && !s.gustEnabled) return;
+    // Debounce: collapse rapid data updates into a single check
+    if (checkTimerRef.current) clearTimeout(checkTimerRef.current);
+    checkTimerRef.current = setTimeout(() => {
+      const now = Date.now();
+      SOURCES.forEach(source => {
+        const s = settings[source.id];
+        if (!s || !s.enabled) return;
+        if (!s.avgEnabled && !s.gustEnabled) return;
 
-      const windInfo = allWindData[source.id];
-      if (!windInfo || !windInfo.live) return;
+        const windInfo = allWindData[source.id];
+        if (!windInfo || !windInfo.live) return;
 
-      const gust = parseFloat(windInfo.live.windGust);
-      const avg = parseFloat(windInfo.live.windSpeed);
-      const prev = previousValues.current[source.id] || {};
-      previousValues.current[source.id] = { gust, avg };
+        const gust = parseFloat(windInfo.live.windGust);
+        const avg = parseFloat(windInfo.live.windSpeed);
+        const prev = previousValues.current[source.id] || {};
+        previousValues.current[source.id] = { gust, avg };
 
-      // Check ALL enabled conditions (AND logic)
-      let allMet = true;
-      let anyJustCrossed = false;
-      const parts = [];
+        // Check ALL enabled conditions (AND logic)
+        let allMet = true;
+        let anyJustCrossed = false;
+        const parts = [];
 
-      if (s.gustEnabled) {
-        if (isNaN(gust) || gust < s.gustThreshold) { allMet = false; }
-        else {
-          parts.push(`raf: ${gust} kts`);
-          if (prev.gust === undefined || prev.gust < s.gustThreshold) anyJustCrossed = true;
+        if (s.gustEnabled) {
+          if (isNaN(gust) || gust < s.gustThreshold) { allMet = false; }
+          else {
+            parts.push(`raf: ${gust} kts`);
+            if (prev.gust === undefined || prev.gust < s.gustThreshold) anyJustCrossed = true;
+          }
         }
-      }
-      if (s.avgEnabled) {
-        if (isNaN(avg) || avg < s.avgThreshold) { allMet = false; }
-        else {
-          parts.push(`moy: ${avg} kts`);
-          if (prev.avg === undefined || prev.avg < s.avgThreshold) anyJustCrossed = true;
+        if (s.avgEnabled) {
+          if (isNaN(avg) || avg < s.avgThreshold) { allMet = false; }
+          else {
+            parts.push(`moy: ${avg} kts`);
+            if (prev.avg === undefined || prev.avg < s.avgThreshold) anyJustCrossed = true;
+          }
         }
-      }
 
-      if (!allMet) return;
+        if (!allMet) return;
 
-      const lastTime = lastNotificationTimes.current[source.id] || 0;
-      const cooldownExpired = (now - lastTime) >= NOTIF_COOLDOWN;
-      if (!anyJustCrossed && !cooldownExpired) return;
+        const lastTime = lastNotificationTimes.current[source.id] || 0;
+        const cooldownExpired = (now - lastTime) >= NOTIF_COOLDOWN;
+        if (!anyJustCrossed && !cooldownExpired) return;
 
-      sendNotification(`⚠️ Alerte ${source.name}`, {
-        body: parts.join(' · '),
-        icon: '/favicon.svg',
-        tag: `alert-${source.id}`
+        sendNotification(`⚠️ Alerte ${source.name}`, {
+          body: parts.join(' · '),
+          icon: '/favicon.svg',
+          tag: `alert-${source.id}`
+        });
+        lastNotificationTimes.current[source.id] = now;
       });
-      lastNotificationTimes.current[source.id] = now;
-    });
+    }, 500);
+
+    return () => { if (checkTimerRef.current) clearTimeout(checkTimerRef.current); };
   }, [allWindData, settings]);
 
   return { settings, update, toggle, DEFAULT_SETTINGS };

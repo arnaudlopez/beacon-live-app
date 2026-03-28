@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { Wind, Thermometer, Droplets, Compass, Activity, Bell, BellOff } from 'lucide-react';
 import { format } from 'date-fns';
 import HistoricalChart from './HistoricalChart';
@@ -84,10 +84,17 @@ const WindCompass = React.memo(({ direction, delay }) => {
 // --- Main Dashboard ---
 
 export default function Dashboard() {
-  const [activeSource, setActiveSource] = useState(() => {
+  const [activeSource, setActiveSourceRaw] = useState(() => {
     const savedId = loadPreference(ACTIVE_SOURCE_KEY, null);
     return SOURCES.find(s => s.id === savedId) || SOURCES[0];
   });
+
+  // Debounce source switching to prevent rapid re-renders (charts, maps)
+  const switchTimerRef = useRef(null);
+  const setActiveSource = useCallback((source) => {
+    if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+    switchTimerRef.current = setTimeout(() => setActiveSourceRaw(source), 80);
+  }, []);
 
   // All data via Supabase Edge Function + Realtime
   const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
