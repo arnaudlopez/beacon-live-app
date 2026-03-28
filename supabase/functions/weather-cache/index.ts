@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const METEOFRANCE_KEY = Deno.env.get("METEOFRANCE_KEY")!;
 const WINDSUP_USER = Deno.env.get("WINDSUP_USER")||"";
 const WINDSUP_PASS = Deno.env.get("WINDSUP_PASS")||"";
-const WINDSUP_PROXY = Deno.env.get("WINDSUP_PROXY")||""; // e.g. https://ajaccio.surf/proxy/windsup
+
 
 const WU_API_KEY = "e1f10a1e78da46f5b10a1e78da96f525";
 
@@ -205,31 +205,21 @@ async function fetchES(slug: string) {
   return result;
 }
 
-function getParisOffsetMs(_ts: number) {
-  const d = new Date(_ts); const month = d.getUTCMonth(); const day = d.getUTCDate();
-  if (month >= 3 && month <= 8) return 7200000;
-  if (month <= 1 || month >= 10) return 3600000;
-  if (month === 2) { const ls = 31 - ((5 + new Date(d.getUTCFullYear(), 2, 31).getDay()) % 7); return day >= ls ? 7200000 : 3600000; }
-  const ls = 31 - ((5 + new Date(d.getUTCFullYear(), 9, 31).getDay()) % 7); return day >= ls ? 3600000 : 7200000;
-}
-
 async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
   const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
   try {
-    // Direct to mobile site - confirmed working from Supabase Edge Functions
     const mobileBase = "https://m.winds-up.com";
-    console.log(`WindsUp: using base=${mobileBase}, proxy_env=${WINDSUP_PROXY ? 'SET' : 'EMPTY'}`);
     const authRes = await fetch(`${mobileBase}/index.php`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: `action=log&pseudo=${encodeURIComponent(WINDSUP_USER)}&password=${encodeURIComponent(WINDSUP_PASS)}&submit=submit-value`,
       redirect: "manual"
     });
-    console.log(`WindsUp: auth status=${authRes.status}`);
+
     const cookieHeader = authRes.headers.get("set-cookie") || "";
     const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/);
-    if (!sidMatch) { console.error("WindsUp: No PHPSESSID, cookie header:", cookieHeader.substring(0, 200)); return null; }
+    if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
     const cookies: string[] = [`PHPSESSID=${sidMatch[1]}`];
     // Capture autolog + codeCnx cookies too
     const autolog = cookieHeader.match(/autolog=([^;]+)/);
@@ -281,7 +271,7 @@ async function fetchWindsUp(sid: string) {
 
     if (history.length === 0) { console.error("WindsUp: 0 history points"); return null; }
     const live = history[history.length - 1];
-    console.log(`WindsUp: ${history.length} pts, last=${new Date(live.time).toISOString()}, todayPts=${todayPts.length}, yPts=${yesterdayPts.length}`);
+
     return {
       live: { windSpeed: live.avgSpeed, windGust: live.maxGust, windDirection: live.windDirection, temperature: null, humidity: null, pressure: null },
       history
