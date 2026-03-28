@@ -38,6 +38,9 @@ const WIND_SOURCE_MAP = {
   'tizzano': 'wunderground_ISARTN1',
   'bonifacio_tramizzi': 'wunderground_IBONIF6',
   'la_tonnara': 'windsup_tonnara',
+  'piantarella': 'windsup_piantarella',
+  'santa_manza': 'windsup_santa_manza',
+  'balistra': 'windsup_balistra',
   'ajaccio_buoy': 'esurfmar_ajaccio',
   'calvi_buoy': 'esurfmar_calvi',
   'owm-1202': 'pioupiou_1202'
