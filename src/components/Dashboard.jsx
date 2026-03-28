@@ -28,7 +28,7 @@ const SkeletonMap = () => <div className="skeleton skeleton-map" />;
 // --- Memoized sub-components ---
 
 // eslint-disable-next-line no-unused-vars
-const DataWidget = React.memo(({ icon: Icon, title, value, unit, badge, delay }) => {
+const DataWidget = React.memo(({ icon: Icon, title, value, unit, badge, delay, valueColor }) => {
   if (value === null || value === undefined) return null;
   return (
     <div className="widget-card glass-panel" style={{ animationDelay: `${delay}s` }}>
@@ -37,7 +37,7 @@ const DataWidget = React.memo(({ icon: Icon, title, value, unit, badge, delay })
       </div>
       <h3 className="widget-title">{title}</h3>
       <div className="widget-value-container">
-        <span className="widget-value">{value}</span>
+        <span className="widget-value" style={valueColor ? { color: valueColor } : undefined}>{value}</span>
         <span className="widget-unit">{unit}</span>
       </div>
       {badge && (
@@ -275,7 +275,7 @@ export default function Dashboard() {
           <HistoricalChart data={historyData} />
 
           <div className="widgets-grid" style={{ marginTop: '1.5rem' }}>
-            <DataWidget icon={Wind} title="Vent moyen" value={weatherData.windSpeed} unit="kts" delay={0.05} />
+            <DataWidget icon={Wind} title="Vent moyen" value={weatherData.windSpeed} unit="kts" delay={0.05} valueColor={getBeaufort(weatherData.windSpeed).color} />
             <DataWidget
               icon={Activity}
               title="Rafale max"
@@ -283,6 +283,7 @@ export default function Dashboard() {
               unit="kts"
               badge={beaufort}
               delay={0.1}
+              valueColor={beaufort?.color}
             />
             <WindCompass direction={weatherData.windDirection} delay={0.15} />
             <DataWidget icon={Thermometer} title="Temp. air" value={weatherData.temperature} unit="°C" delay={0.2} />

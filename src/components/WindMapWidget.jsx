@@ -106,8 +106,8 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
           </svg>
         </div>` : ''}
         <div class="wind-label glass-panel" style="cursor: pointer;">
-          <div class="wind-speed">${data.windSpeed} <span class="text-xs">kts</span></div>
-          <div class="wind-gust">Max: ${data.windGust}</div>
+          <div class="wind-speed" style="color: ${speedColor};">${data.windSpeed} <span class="text-xs">kts</span></div>
+          <div class="wind-gust" style="color: ${speedColor}; opacity: 0.7;">Max: ${data.windGust}</div>
           <div class="wind-age-badge" style="color: ${badgeColor};">
             <span class="stale-dot ${dotClass}" style="background: ${badgeColor};"></span>
             ${ageLabel}
