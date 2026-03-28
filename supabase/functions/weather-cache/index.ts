@@ -233,7 +233,7 @@ async function fetchWindsUp(sid: string) {
 
       // Parse precise degrees from HTML table (spotObsLine rows with div.deg)
       const degByTime = new Map<string, number>(); // "HH:MM" -> precise degrees
-      const rowRegex = /class="spotObsLine"[^>]*>[\s\S]*?<\/div>\s*<\/div>/g;
+      const rowRegex = /class="spotObsLine"[^>]*>([\s\S]*?)(?=<div[^>]*class="spotObsLine"|<script|$)/g;
       let rm;
       while ((rm = rowRegex.exec(html)) !== null) {
         const row = rm[0];
