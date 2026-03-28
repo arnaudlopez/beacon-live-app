@@ -206,7 +206,6 @@ async function fetchES(slug: string) {
 
 async function fetchWindsUp(sid: string) {
   if (!WINDSUP_USER || !WINDSUP_PASS) return null;
-  const degMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
   try {
     const mobileBase = "https://m.winds-up.com";
     const authRes = await fetch(`${mobileBase}/index.php`, {
@@ -220,32 +219,54 @@ async function fetchWindsUp(sid: string) {
     const sidMatch = cookieHeader.match(/PHPSESSID=([^;]+)/);
     if (!sidMatch) { console.error("WindsUp: No PHPSESSID"); return null; }
     const cookies: string[] = [`PHPSESSID=${sidMatch[1]}`];
-    // Capture autolog + codeCnx cookies too
     const autolog = cookieHeader.match(/autolog=([^;]+)/);
     const codeCnx = cookieHeader.match(/codeCnx=([^;]+)/);
     if (autolog) cookies.push(`autolog=${autolog[1]}`);
     if (codeCnx) cookies.push(`codeCnx=${codeCnx[1]}`);
     const c = cookies.join("; ");
 
-    // Helper: parse moy + minmax series from a mobile page
     function parseMobilePage(html: string) {
       const moyRegex = /\{x:(\d{13}),y:(\d+),o:"([^"]*)",color:"([^"]*)",img:"[^"]*",?\}/g;
       const minmaxRegex = /\{x:(\d{13}),low:(\d+),high:(\d+),?\}/g;
-      const moyMap = new Map<number, {avg: number, dir: number|null}>();
-      const mmMap = new Map<number, number>(); // realTs → high (gust)
+      const moyMap = new Map<number, {avg: number, cardinal: string}>();
+      const mmMap = new Map<number, number>();
+
+      // Parse precise degrees from HTML table (spotObsLine rows with div.deg)
+      const degByTime = new Map<string, number>(); // "HH:MM" -> precise degrees
+      const rowRegex = /class="spotObsLine"[^>]*>[\s\S]*?<\/div>\s*<\/div>/g;
+      let rm;
+      while ((rm = rowRegex.exec(html)) !== null) {
+        const row = rm[0];
+        const timeMatch = row.match(/>(\d{1,2}:\d{2})</);
+        const degMatch = row.match(/class="deg"[^>]*>(\d{1,3})</);
+        if (timeMatch && degMatch) {
+          degByTime.set(timeMatch[1], parseInt(degMatch[1]));
+        }
+      }
+
+      // Cardinal fallback for timestamps without precise degrees (e.g. yesterday)
+      const cardinalMap: Record<string, number> = { "N": 0, "NNE": 22, "NE": 45, "ENE": 67, "E": 90, "ESE": 112, "SE": 135, "SSE": 157, "S": 180, "SSO": 202, "SO": 225, "OSO": 247, "O": 270, "ONO": 292, "NO": 315, "NNO": 337 };
+
       let m;
       while ((m = moyRegex.exec(html)) !== null) {
-        const ts = parseInt(m[1]); // Mobile site timestamps are already UTC
-        const dir = m[3] && degMap[m[3]] !== undefined ? degMap[m[3]] : null;
-        moyMap.set(ts, { avg: parseInt(m[2]), dir });
+        const ts = parseInt(m[1]);
+        moyMap.set(ts, { avg: parseInt(m[2]), cardinal: m[3] });
       }
       while ((m = minmaxRegex.exec(html)) !== null) {
-        const ts = parseInt(m[1]); // Mobile site timestamps are already UTC
-        mmMap.set(ts, parseInt(m[3])); // high = gust
+        const ts = parseInt(m[1]);
+        mmMap.set(ts, parseInt(m[3]));
       }
+
       const pts: Array<{time: number, avgSpeed: number, maxGust: number, temperature: null, windDirection: number|null}> = [];
       for (const [ts, moy] of moyMap) {
-        pts.push({ time: ts, avgSpeed: moy.avg, maxGust: mmMap.get(ts) ?? moy.avg, temperature: null, windDirection: moy.dir });
+        // Table times are local CET/CEST - convert UTC timestamp to local for lookup
+        const utcDate = new Date(ts);
+        const month = utcDate.getUTCMonth();
+        const offsetH = (month >= 3 && month <= 8) ? 2 : 1;
+        const localH = (utcDate.getUTCHours() + offsetH) % 24;
+        const hhmm = `${localH}:${String(utcDate.getUTCMinutes()).padStart(2, '0')}`;
+        const dir = degByTime.get(hhmm) ?? (cardinalMap[moy.cardinal] !== undefined ? cardinalMap[moy.cardinal] : null);
+        pts.push({ time: ts, avgSpeed: moy.avg, maxGust: mmMap.get(ts) ?? moy.avg, temperature: null, windDirection: dir });
       }
       return pts;
     }
