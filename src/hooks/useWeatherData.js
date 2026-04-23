@@ -49,6 +49,9 @@ const WIND_SOURCE_MAP = {
 const WIND_EDGE_KEYS = Object.values(WIND_SOURCE_MAP);
 const MARINE_SOURCES = ['candhis_revellata', 'candhis_bonifacio', 'esurfmar_ajaccio'];
 
+// Fix 5: deduplicate esurfmar_ajaccio which appears in both lists
+const ALL_EDGE_SOURCES = [...new Set([...WIND_EDGE_KEYS, ...MARINE_SOURCES])];
+
 // Create Supabase client (singleton)
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -114,23 +117,16 @@ export function useWeatherData() {
   useEffect(() => {
     let cancelled = false;
 
-    // --- 1. Initial full fetch ---
+    // --- 1. Initial full fetch (Fix 5+6: single request, no duplicate esurfmar_ajaccio) ---
     const initialFetch = async () => {
-      const [windRaw, marineRaw] = await Promise.all([
-        fetchFromEdge(WIND_EDGE_KEYS),
-        fetchFromEdge(MARINE_SOURCES),
-      ]);
-
+      const raw = await fetchFromEdge(ALL_EDGE_SOURCES);
       if (cancelled) return;
-
-      if (windRaw) {
-        setWindData(mapWindData(windRaw));
-      }
-      if (marineRaw) {
-        processMarine(marineRaw);
+      if (raw) {
+        setWindData(mapWindData(raw));
+        processMarine(raw);
+        setError('');
       }
       setLastUpdated(new Date());
-      setError('');
       setIsLoading(false);
     };
 
