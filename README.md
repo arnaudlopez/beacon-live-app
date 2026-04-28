@@ -2,7 +2,7 @@
 
 **Beacon Live** est une Progressive Web App (PWA) de télémétrie maritime en temps réel, conçue spécifiquement pour les surfeurs et les passionnés de la mer en Corse (La Revellata, Ajaccio, Bonifacio).
 
-LIve: ![https://ajaccio.surf](https://ajaccio.surf)
+LIve: [https://ajaccio.surf](https://ajaccio.surf)
 
 L'application agrège intelligemment les données de plusieurs bouées météorologiques et océanographiques, et les présente dans un tableau de bord moderne, rapide et mobile-first, avec un design "Glassmorphism" dynamique inspiré des couleurs de l'océan.
 
