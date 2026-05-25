@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createWeatherService } from './server.js';
 
 const tempDirs = [];
@@ -70,6 +70,82 @@ describe('weather service entrypoint contract', () => {
       const persisted = JSON.parse(await readFile(storePath, 'utf8'));
       expect(persisted.snapshot.windData.porticcio.live.windSpeed).toBe(snapshot.windData.porticcio.live.windSpeed);
       expect(persisted.observations.some((item) => item.sourceId === 'windsup_porticcio')).toBe(true);
+    } finally {
+      await service.stop();
+    }
+  });
+
+  it('can run in real-source mode with mocked upstream fetchers and no browser-exposed secrets', async () => {
+    const storePath = await makeStorePath();
+    const fetchImpl = vi.fn(async (url) => {
+      const target = String(url);
+      if (target.includes('DPPaquetObs')) {
+        return {
+          ok: true,
+          json: async () => [{
+            validity_time: '2026-05-25T08:00:00Z',
+            ff: 5,
+            fxi10: 8,
+            dd: 270,
+            t: 293.15,
+          }],
+        };
+      }
+      if (target.includes('api.pioupiou.fr/v1/live')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: {
+              measurements: {
+                wind_speed_avg: 18.52,
+                wind_speed_max: 27.78,
+                wind_heading: 245,
+              },
+            },
+          }),
+        };
+      }
+      if (target.includes('api.pioupiou.fr/v1/archive')) {
+        return {
+          ok: true,
+          json: async () => ({
+            data: [['2026-05-25T08:00:00Z', null, null, null, 18.52, 27.78, 245]],
+          }),
+        };
+      }
+      return {
+        ok: false,
+        status: 404,
+        text: async () => '',
+        json: async () => ({}),
+      };
+    });
+
+    const service = await createWeatherService({
+      clock: makeClock(),
+      host: '127.0.0.1',
+      port: 0,
+      storePath,
+      intervalMs: 20_000,
+      heartbeatMs: 50,
+      sourceMode: 'real',
+      fetchImpl,
+      env: {
+        METEOFRANCE_KEY: 'server-only-mf-key',
+      },
+    });
+
+    const { baseUrl } = await service.start();
+
+    try {
+      const snapshot = await waitForJson(
+        `${baseUrl}/api/weather`,
+        (payload) => Boolean(payload.windData?.la_parata?.live?.windSpeed),
+      );
+
+      expect(snapshot.windData.la_parata.live.windSpeed).toBe('9.7');
+      expect(snapshot.windData['owm-1202'].live.windSpeed).toBe('10.0');
+      expect(snapshot.sourceHealth.meteofrance_20004003.status).toBe('ok');
     } finally {
       await service.stop();
     }

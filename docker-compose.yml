@@ -64,8 +64,13 @@ services:
       - HOST=0.0.0.0
       - PORT=8787
       - WEATHER_STORE_PATH=/data/weather-state.json
+      - WEATHER_SOURCE_MODE=${WEATHER_SOURCE_MODE:-real}
       - WEATHER_POLL_MS=${WEATHER_POLL_MS:-20000}
       - WEATHER_HEARTBEAT_MS=${WEATHER_HEARTBEAT_MS:-15000}
+      - METEOFRANCE_KEY=${METEOFRANCE_KEY:-}
+      - WINDSUP_USER=${WINDSUP_USER:-}
+      - WINDSUP_PASS=${WINDSUP_PASS:-}
+      - WUNDERGROUND_API_KEY=${WUNDERGROUND_API_KEY:-}
     volumes:
       - weather-data:/data
     read_only: true

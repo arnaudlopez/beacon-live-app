@@ -22,11 +22,35 @@ VITE_SUPABASE_URL=https://rnjtvepcoxvzlwrulnks.supabase.co
 VITE_SUPABASE_ANON_KEY=VOTRE_CLE_ANON_SUPABASE
 VITE_WEATHER_BACKEND_URL=/api
 
+WEATHER_SOURCE_MODE=real
 WEATHER_POLL_MS=20000
 WEATHER_HEARTBEAT_MS=15000
+METEOFRANCE_KEY=VOTRE_CLE_METEOFRANCE
+WINDSUP_USER=VOTRE_LOGIN_WINDSUP
+WINDSUP_PASS=VOTRE_MOT_DE_PASSE_WINDSUP
+WUNDERGROUND_API_KEY=
 ```
 
-`WEATHER_POLL_MS=20000` donne un polling backend toutes les 20 secondes pour les sources demo. Pour de vraies sources, ne descendez pas sous la fréquence de publication réelle de l'amont.
+`WEATHER_SOURCE_MODE=real` active les adaptateurs météo Node côté `weather-api`.
+
+Variables à ajouter dans Portainer :
+
+- `VITE_WEATHER_BACKEND_URL=/api`
+- `WEATHER_SOURCE_MODE=real`
+- `WEATHER_POLL_MS=20000`
+- `WEATHER_HEARTBEAT_MS=15000`
+- `METEOFRANCE_KEY`
+- `WINDSUP_USER`
+- `WINDSUP_PASS`
+- `WUNDERGROUND_API_KEY` optionnel, le backend garde une clé de compatibilité serveur si cette variable est vide.
+
+`WEATHER_POLL_MS=20000` donne un polling backend toutes les 20 secondes pour les sources rapides. Les adaptateurs lents gardent un intervalle plus long côté serveur. Ne descendez pas sous la fréquence de publication réelle de l'amont.
+
+Pour un smoke sans credentials, utilisez temporairement :
+
+```bash
+WEATHER_SOURCE_MODE=demo
+```
 
 ## Lancer en local
 
