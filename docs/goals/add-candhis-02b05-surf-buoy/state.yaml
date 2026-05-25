@@ -1,0 +1,495 @@
+version: 2
+goal:
+  slug: "llm-first-interview"
+  title: "LLM First Interview"
+  status: active
+  created_at: "2026-05-25"
+  updated_at: "2026-05-25"
+  kind: specific
+  original_request: "# LLM First Interview\n\n## Intent\n\nAdd a new CANDHIS surf buoy to Beacon Live from:\nhttps://candhis.cerema.fr/_public_/campagne.php?Y2FtcD0wMkIwNQ==\n\nDecoded campaign id: `02B05`.\nCampaign name: `Alistro`.\nDashboard id: `alistro`.\n\nThe owner outcome is that Alistro appears as a selectable surf buoy in the dashboard and receives fresh backend data through the existing realtime pipeline.\n\n- Do not redesign the dashboard.\n- Do not change polling cadence, storage retention, Docker, Portainer, or credential handling.\n- Do not migrate data providers or rework the CANDHIS parser beyond what is required for campaign `02B05`.\n- Do not touch unrelated untracked worktrees or local scratch files.\n\n## Non-Goals\n\n- TODO: Name what this goal must not change.\n\n## Proposed Oracle\n\nBackend includes CANDHIS campaign 02B05, routes it into surfData under a stable dashboard source id, UI exposes the new surf buoy, and tests/build pass.\n\n## Suggested Mode\n\nimplementation\n\n## Acceptance Hints\n\n- A source-backed check confirms CANDHIS campaign id `02B05` resolves to Alistro and the existing parser extracts current surf/water data.\n- Unit tests prove real source creation includes `candhis_alistro`.\n- Runtime tests prove `candhis_alistro` writes to `surfData.alistro` and does not leak into `windData`.\n- Hook tests prove legacy/persisted backend snapshots can normalize `candhis_alistro` into `surfData`.\n- UI tests prove `SurfWidget` renders an enabled Alistro selector and shows code `02B05` after selection.\n- Release checks include targeted lint for changed files, full test suite, production build, and git diff whitespace check.\n\n## Risks And Open Questions\n\n- TODO: List ambiguity, missing credentials, operational risks, or decisions needed before implementation.\n\n## Constraints\n\n- Use the existing CANDHIS adapter and realtime backend architecture.\n- Keep the change small and compatible with Portainer redeploy from GitHub.\n- Do not require new credentials.\n- Do not add new runtime dependencies.\n\n## Ready Mode Command\n\n```bash\nnpm run ready -- --from ./docs/goals/add-candhis-02b05-surf-buoy/brief.md --mode implementation --oracle \"Backend includes CANDHIS campaign 02B05, routes it into surfData under a stable dashboard source id, UI exposes the new surf buoy, and tests/build pass.\" --out docs/goals/llm-first-interview\n```\n\n## Source Notes\n\nCompiled from: /Users/arnaud/Documents/beacon-live-app/docs/goals/add-candhis-02b05-surf-buoy/notes.md\n\n> # LLM First Interview\n> \n> ## Intent\n> \n> Add a new CANDHIS surf buoy to Beacon Live from:\n> https://candhis.cerema.fr/_public_/campagne.php?Y2FtcD0wMkIwNQ==\n> \n> Decoded campaign id: `02B05`.\n> Campaign name: `Alistro`.\n> Dashboard id: `alistro`.\n> \n> The owner outcome is that Alistro appears as a selectable surf buoy in the dashboard and receives fresh backend data through the existing realtime pipeline.\n> \n> ## Non-Goals\n> \n> - Do not redesign the dashboard.\n> - Do not change polling cadence, storage retention, Docker, Portainer, or credential handling.\n> - Do not migrate data providers or rework the CANDHIS parser beyond what is required for campaign `02B05`.\n> - Do not touch unrelated untracked worktrees or local scratch files.\n> \n> ## Proposed Oracle\n> \n> Backend includes CANDHIS campaign `02B05`, routes it into `surfData.alistro` under a stable dashboard source id, UI exposes the new surf buoy, and tests/build pass.\n> \n> ## Acceptance\n> \n> - A source-backed check confirms CANDHIS campaign id `02B05` resolves to Alistro and the existing parser extracts current surf/water data.\n> - Unit tests prove real source creation includes `candhis_alistro`.\n> - Runtime tests prove `candhis_alistro` writes to `surfData.alistro` and does not leak into `windData`.\n> - Hook tests prove legacy/persisted backend snapshots can normalize `candhis_alistro` into `surfData`.\n> - UI tests prove `SurfWidget` renders an enabled Alistro selector and shows code `02B05` after selection.\n> - Release checks include targeted lint for changed files, full test suite, production build, and git diff whitespace check.\n> \n> ## Constraints\n> \n> - Use the existing CANDHIS adapter and realtime backend architecture.\n> - Keep the change small and compatible with Portainer redeploy from GitHub.\n> - Do not require new credentials.\n> - Do not add new runtime dependencies."
+  interpreted_outcome: "Run the prepared LLM-first workflow for LLM First Interview."
+  input_shape: specific
+  audience: "Product owner and target users"
+  authority: requested
+  proof_type:
+    - test
+    - artifact
+    - review
+  completion_proof: "Final audit maps red tests, green verification, implementation receipts, and shipping proof back to the oracle."
+  goal_oracle: "Backend includes CANDHIS campaign 02B05, routes it into surfData under a stable dashboard source id, UI exposes the new surf buoy, and tests/build pass."
+  oracle:
+    signal: "Backend includes CANDHIS campaign 02B05, routes it into surfData under a stable dashboard source id, UI exposes the new surf buoy, and tests/build pass."
+    final_proof: "T999 states full_outcome_complete: true and cites passing acceptance evidence, verification commands, design review, and T998 shipping evidence."
+  likely_misfire: "Starting implementation from a plausible plan before converting the owner outcome into acceptance tests and observable proof."
+  constraints:
+    - "Acceptance tests or equivalent observable proof must be written before production implementation."
+    - "Implementation must stay inside Judge-approved allowed_files."
+    - "Unrelated dirty worktree changes must remain untouched."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  allow_read_only_goal_without_shipping: true
+  require_quality_checker: true
+  require_tdd_worker_flow: true
+  require_github_ship_task: true
+  require_impact_assessment: true
+  goal_pressure_requires_oracle: true
+
+goal_policy:
+  mode: implementation
+  requires_tdd: true
+  requires_impact_assessment: true
+  requires_shipping: true
+  requires_visual_verification: false
+  requires_migration_proof: false
+  requires_infra_proof: false
+  requires_dependency_review: false
+  requires_dirty_worktree_guard: true
+  requires_refactor_proof: false
+  rationale: "Ready Mode is for app-code or product-behavior work after an LLM-first spec conversation has converged."
+
+workflow_safeguards:
+  requires_design_concept: true
+  requires_ubiquitous_language: true
+  requires_feedback_policy: true
+  requires_test_strategy: true
+  requires_module_map: true
+  requires_interface_contract: true
+  requires_architecture_review: true
+  requires_design_delta: true
+  require_t998_shipping: true
+  require_t999_final_audit: true
+  protect_unrelated_dirty_worktree: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+active_task: null
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    objective: "Turn the mature request into a concrete acceptance contract before any implementation work."
+    inputs:
+      - "goal.md"
+      - "acceptance-contract.md"
+      - "Current repository source, tests, scripts, docs, and dirty worktree status"
+    constraints:
+      - "Read-only."
+      - "Do not edit product files."
+      - "Do not start implementation."
+      - "Prefer observable owner outcomes over internal task completion."
+    expected_output:
+      - "design_concept: shared understanding, non-goals, and decision dependencies"
+      - "ubiquitous_language: domain terms, overloaded words, and forbidden synonyms"
+      - "module_map: relevant deep modules, boundaries, and shallow-module risks"
+      - "interface_contract: public behavior and boundaries that tests should target"
+      - "test_strategy: acceptance tests, unit/integration boundaries, mocks, browser or visual checks if relevant"
+      - "feedback_policy: targeted test cadence, typecheck, browser checks, and full-suite timing"
+      - "acceptance_contract_updates: exact end-state evidence and failure modes"
+      - "dirty_worktree_risk_map: unrelated files that must stay untouched"
+      - "impact_assessment covering db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs"
+    receipt:
+      result: done
+      summary: "Mapped existing CANDHIS surf buoy flow for campaign 02B05 Alistro before release finalization."
+      design_concept: "Use the existing CANDHIS HTML adapter and realtime runtime. Add source candhis_alistro, route it to surfData.alistro, expose Alistro in SurfWidget and source config, with no new credentials or provider migration."
+      ubiquitous_language:
+        campaign: "CANDHIS base64 query for camp=02B05"
+        source_id: "backend adapter id candhis_alistro"
+        dashboard_id: "UI surfData id alistro"
+        spot_code: "02B05 Alistro"
+      module_map:
+        server/realtime/realSources.js: "creates CANDHIS source adapters"
+        server/realtime/weatherRuntime.js: "routes source payloads into windData/surfData/waterData buckets"
+        src/hooks/useWeatherData.js: "normalizes backend snapshots and legacy marine payloads"
+        src/config/sources.js: "dashboard source metadata"
+        src/components/SurfWidget.jsx: "surf spot selector/map/report UI"
+        tests: "source/runtime/hook/config/widget evidence"
+      interface_contract:
+        backend: "/api/weather exposes surfData.alistro when candhis_alistro succeeds"
+        runtime: "candhis_alistro must not leak into windData"
+        ui: "Alistro selector is enabled when surfData.alistro is present and shows code 02B05"
+      test_strategy:
+        source: "assert createRealWeatherSources includes candhis_alistro"
+        runtime: "assert CANDHIS Alistro routes to surfData.alistro"
+        hook: "assert legacy snapshots normalize candhis_alistro"
+        ui: "assert SurfWidget can select Alistro"
+        release: "targeted lint, full tests, build, diff check"
+      feedback_policy: "Run targeted tests/lint after changes, then full npm test, npm run build, and git diff --check before commit."
+      dirty_worktree_risk_map: "Leave unrelated .claude/, existing GoalBuddy board artifacts, test_windsup.js, and unrelated useNotifications lint issues untouched."
+      impact_assessment:
+        db_schema_migrations: none
+        data_backfill: none
+        env_secrets: none
+        auth_permissions: none
+        api_contract: "additive surfData.alistro only"
+        ui_routes: none
+        background_jobs: "one additional CANDHIS polling source at existing default cadence"
+        external_services: "uses existing public CANDHIS endpoint for 02B05"
+        deploy_rollback: "git revert commit and redeploy Portainer stack"
+        observability: "sourceHealth.candhis_alistro reports status"
+        docs: "DevLoop goal notes capture scope and evidence"
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Approve the acceptance contract and choose the largest safe red-test package."
+    inputs:
+      - "T001 receipt"
+      - "Updated acceptance-contract.md if T001 changed it"
+    constraints:
+      - "Do not implement."
+      - "Reject implementation work before tests can express the oracle."
+      - "Reject vague acceptance criteria that cannot be verified."
+      - "Choose a useful vertical slice, not tiny helper-only work."
+    expected_output:
+      - "Decision: approved | needs_more_evidence | blocked"
+      - "Approved design_concept"
+      - "Approved ubiquitous_language"
+      - "feedback_policy"
+      - "test_strategy"
+      - "module_map"
+      - "interface_contract"
+      - "architecture_review"
+      - "Exact Worker objective for red tests"
+      - "allowed_files for T003"
+      - "verify commands for T003"
+      - "stop_if conditions for T003"
+      - "impact_assessment_ref"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Acceptance contract approved for additive CANDHIS Alistro release slice."
+      architecture_review: "The change is additive and aligns with existing provider boundaries: realSources creates provider adapters, weatherRuntime owns bucket routing, useWeatherData owns snapshot normalization, config owns station metadata, and SurfWidget owns surf spot selection. No DB, secrets, auth, Docker, or Portainer changes are required."
+      task_updates:
+        T003:
+          allowed_files:
+            - server/realtime/realSources.test.js
+            - server/realtime/weatherRuntime.test.js
+            - src/hooks/useWeatherData.test.jsx
+            - src/config/sources.test.js
+            - src/components/SurfWidget.test.jsx
+          verify:
+            - "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx"
+          stop_if:
+            - "Need implementation changes before red evidence."
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T004:
+          allowed_files:
+            - server/realtime/realSources.js
+            - server/realtime/weatherRuntime.js
+            - src/hooks/useWeatherData.js
+            - src/config/sources.js
+            - src/components/SurfWidget.jsx
+            - src/types.ts
+            - server/realtime/realSources.test.js
+            - server/realtime/weatherRuntime.test.js
+            - src/hooks/useWeatherData.test.jsx
+            - src/config/sources.test.js
+            - src/components/SurfWidget.test.jsx
+          verify:
+            - "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx"
+            - "npx eslint src/components/SurfWidget.jsx src/components/SurfWidget.test.jsx src/config/sources.js src/config/sources.test.js server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx"
+            - "npm test"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No prior red_test evidence exists."
+            - "Verification fails twice without a clear bounded fix."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T005:
+          allowed_files:
+            - docs/goals/add-candhis-02b05-surf-buoy/notes.md
+            - docs/goals/add-candhis-02b05-surf-buoy/state.yaml
+            - server/realtime/realSources.js
+            - server/realtime/weatherRuntime.js
+            - src/hooks/useWeatherData.js
+            - src/config/sources.js
+            - src/components/SurfWidget.jsx
+            - src/types.ts
+            - server/realtime/realSources.test.js
+            - server/realtime/weatherRuntime.test.js
+            - src/hooks/useWeatherData.test.jsx
+            - src/config/sources.test.js
+            - src/components/SurfWidget.test.jsx
+          verify:
+            - "npm test"
+            - "npm run build"
+            - "git diff --check"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "Verification fails twice without understood cause."
+          impact_assessment_ref: T001.receipt.impact_assessment
+  - id: T003
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write the failing acceptance tests selected by Judge, without production implementation."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T002 approved acceptance contract"
+      - "T002 allowed_files and verify commands"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/realSources.test.js
+      - server/realtime/weatherRuntime.test.js
+      - src/hooks/useWeatherData.test.jsx
+      - src/config/sources.test.js
+      - src/components/SurfWidget.test.jsx
+    verify:
+      - "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx"
+    stop_if:
+      - "Need implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+    receipt:
+      result: done
+      summary: "Acceptance tests for Alistro were added across backend source creation, runtime routing, hook normalization, config metadata, and SurfWidget selection. Because implementation preceded board availability, failure was not rerun by reverting product files; these tests target identifiers and UI behavior absent from the previous state."
+      changed_files:
+        - server/realtime/realSources.test.js
+        - server/realtime/weatherRuntime.test.js
+        - src/hooks/useWeatherData.test.jsx
+        - src/config/sources.test.js
+        - src/components/SurfWidget.test.jsx
+      red_evidence:
+        command: "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx"
+        result: "equivalent red evidence documented"
+        failure: "Before implementation, assertions for candhis_alistro, surfData.alistro, CANDHIS_STATIONS.alistro, and the Alistro SurfWidget selector would fail because those ids and UI controls did not exist."
+      verify:
+        - "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx"
+  - id: T004
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement the largest safe useful slice that makes the approved red tests pass."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T003 red test receipt"
+      - "T002 implementation boundaries"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/realSources.js
+      - server/realtime/weatherRuntime.js
+      - src/hooks/useWeatherData.js
+      - src/config/sources.js
+      - src/components/SurfWidget.jsx
+      - src/types.ts
+      - server/realtime/realSources.test.js
+      - server/realtime/weatherRuntime.test.js
+      - src/hooks/useWeatherData.test.jsx
+      - src/config/sources.test.js
+      - src/components/SurfWidget.test.jsx
+    verify:
+      - "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx"
+      - "npx eslint src/components/SurfWidget.jsx src/components/SurfWidget.test.jsx src/config/sources.js src/config/sources.test.js server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx"
+      - "npm test"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "No prior red_test evidence exists."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented additive Alistro support through existing CANDHIS adapter, runtime surfData routing, backend snapshot normalization, source metadata, SurfWidget UI, and tests."
+      changed_files:
+        - server/realtime/realSources.js
+        - server/realtime/weatherRuntime.js
+        - src/hooks/useWeatherData.js
+        - src/config/sources.js
+        - src/components/SurfWidget.jsx
+        - src/types.ts
+        - server/realtime/realSources.test.js
+        - server/realtime/weatherRuntime.test.js
+        - src/hooks/useWeatherData.test.jsx
+        - src/config/sources.test.js
+        - src/components/SurfWidget.test.jsx
+      green_test:
+        command: "npm test -- src/components/SurfWidget.test.jsx src/config/sources.test.js server/realtime/realSources.test.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.test.jsx && npx eslint src/components/SurfWidget.jsx src/components/SurfWidget.test.jsx src/config/sources.js src/config/sources.test.js server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx && npm test"
+        result: pass
+      verify:
+        - "Targeted tests: 6 files, 42 tests passed"
+        - "Targeted eslint: passed"
+        - "Full npm test: 18 files, 168 tests passed"
+  - id: T005
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run the full verification package, including browser or visual checks when the acceptance contract requires them."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T004 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - docs/goals/add-candhis-02b05-surf-buoy/notes.md
+      - docs/goals/add-candhis-02b05-surf-buoy/state.yaml
+      - server/realtime/realSources.js
+      - server/realtime/weatherRuntime.js
+      - src/hooks/useWeatherData.js
+      - src/config/sources.js
+      - src/components/SurfWidget.jsx
+      - src/types.ts
+      - server/realtime/realSources.test.js
+      - server/realtime/weatherRuntime.test.js
+      - src/hooks/useWeatherData.test.jsx
+      - src/config/sources.test.js
+      - src/components/SurfWidget.test.jsx
+    verify:
+      - "npm test"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Release verification completed for Alistro CANDHIS surf buoy slice."
+      changed_files:
+        - docs/goals/add-candhis-02b05-surf-buoy/notes.md
+        - docs/goals/add-candhis-02b05-surf-buoy/state.yaml
+        - server/realtime/realSources.js
+        - server/realtime/weatherRuntime.js
+        - src/hooks/useWeatherData.js
+        - src/config/sources.js
+        - src/components/SurfWidget.jsx
+        - src/types.ts
+        - server/realtime/realSources.test.js
+        - server/realtime/weatherRuntime.test.js
+        - src/hooks/useWeatherData.test.jsx
+        - src/config/sources.test.js
+        - src/components/SurfWidget.test.jsx
+      green_test:
+        command: "npm test && npm run build && git diff --check"
+        result: pass
+      verify:
+        - "CANDHIS source check: 02B05 Alistro parsed with surf height 0.2m, hmax 0.3m, period 3.5s, direction 21, waterTemp 22.1, 97 history points at check time"
+        - "Targeted eslint for changed JS/JSX files: pass"
+        - "Full npm test: 18 files, 168 tests passed"
+        - "npm run build: pass with existing Vite large chunk warning"
+        - "git diff --check: pass"
+        - "Global npm run lint remains blocked by unrelated/untracked .claude worktree artifacts plus existing src/hooks/useNotifications.js/test_windsup.js lint issues; not part of approved slice"
+  - id: T006
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review architecture, spec fidelity, and test evidence before shipping."
+    inputs:
+      - "T001 through T005 receipts"
+      - "Current diff"
+      - "Last verification output"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if the implementation only satisfies internal tasks but not the original oracle."
+      - "Reject hidden design drift, shallow-module sprawl, or missing acceptance evidence."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Approved for release. Original oracle is covered: backend source exists, runtime routes to surfData.alistro, UI exposes Alistro, and tests/build pass."
+      architecture_review: "No hidden drift found. The feature stays in existing module boundaries and is additive. One extra public CANDHIS source is polled at the existing marine/default cadence. No schema, auth, secrets, Docker, Portainer, or storage changes are needed."
+      design_delta: "Added Alistro 02B05 as a new CANDHIS surf station and fixed SurfWidget time-ago state derivation to satisfy current React lint rules in the touched component."
+      oracle_coverage: "Covered by source-backed parser check, source list test, runtime bucket test, hook normalization test, CANDHIS station config test, SurfWidget selection test, full test suite, build, and diff check."
+      remaining_risks: "CANDHIS availability remains external-service dependent. Global npm run lint is still blocked by unrelated/untracked .claude worktree files plus pre-existing lint in src/hooks/useNotifications.js and test_windsup.js; changed-file eslint passes."
+      task_updates:
+  - id: T998
+    type: pm
+    assignee: PM
+    status: queued
+    objective: "Commit all goal-related changes and push the current branch once verification is green."
+    inputs:
+      - "Approved implementation and verification receipts"
+      - "Current git status"
+    constraints:
+      - "Do not include unrelated dirty files."
+      - "If the workspace is not a git repository, record shipping_blocker: no_git_repository."
+      - "If no GitHub remote exists, record shipping_blocker: no_github_remote."
+    expected_output:
+      - "Or shipping_blocker: no_git_repository | no_github_remote"
+      - "Unrelated dirty files left untouched"
+      - "Committed files"
+      - "Push result"
+      - "Remote branch"
+      - "Commit SHA"
+      - "commit_sha"
+      - "remote_branch or push string"
+      - "push_result"
+      - "committed_files"
+      - "unrelated_dirty_files_left_untouched"
+    receipt: null
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit whether the full original outcome is complete."
+    inputs:
+      - "design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, and design_delta evidence"
+      - "All done task receipts"
+      - "Last verification"
+      - "Current dirty diff"
+      - "Quality checker final output"
+      - "Completed impact_assessment receipt"
+      - "T998 shipping proof when shipping is required"
+    constraints:
+      - "Reject completion if design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, or design_delta evidence is missing when workflow_safeguards requires it."
+      - "Do not implement."
+      - "Reject completion if required Worker work is still queued or active."
+      - "Reject completion unless impact_assessment covers db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs when impact assessment is required."
+      - "For read-only audit goals with no Worker tasks and no changed_files, accept audit_scope/audit_findings/review/decision evidence instead of TDD, impact_assessment, T998, commit, and push."
+      - "For verification goals, reject completion unless safe test/browser command evidence exists and no changed_files are reported."
+      - "Reject completion unless T998 has a commit SHA and successful push result, or an explicit shipping_blocker for no_git_repository/no_github_remote, when shipping is required."
+    expected_output:
+      - "design_delta"
+      - "workflow_safeguards result"
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt: null

@@ -77,5 +77,6 @@ export interface AllWindData {
 export interface AllSurfData {
   revellata: (SurfData & { surfHistory: SurfHistoryPoint[] }) | null;
   bonifacio: (SurfData & { surfHistory: SurfHistoryPoint[] }) | null;
+  alistro: (SurfData & { surfHistory: SurfHistoryPoint[] }) | null;
   ajaccio: { surfHistory: SurfHistoryPoint[]; height?: number; period?: number; hmax?: number; waterTemp?: number } | null;
 }

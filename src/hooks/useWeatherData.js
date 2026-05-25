@@ -48,7 +48,7 @@ const WIND_SOURCE_MAP = {
 };
 
 const WIND_EDGE_KEYS = Object.values(WIND_SOURCE_MAP);
-const MARINE_SOURCES = ['candhis_revellata', 'candhis_bonifacio', 'esurfmar_ajaccio'];
+const MARINE_SOURCES = ['candhis_revellata', 'candhis_bonifacio', 'candhis_alistro', 'esurfmar_ajaccio'];
 
 // Fix 5: deduplicate esurfmar_ajaccio which appears in both lists
 const ALL_EDGE_SOURCES = [...new Set([...WIND_EDGE_KEYS, ...MARINE_SOURCES])];
@@ -79,6 +79,7 @@ function normalizeBackendSnapshot(snapshot = {}) {
 
   const rev = surfData.revellata ? null : windData.candhis_revellata;
   const bon = surfData.bonifacio ? null : windData.candhis_bonifacio;
+  const alistro = surfData.alistro ? null : windData.candhis_alistro;
   const ajaccio = surfData.ajaccio ? null : windData.ajaccio_buoy;
 
   if (rev) {
@@ -91,6 +92,12 @@ function normalizeBackendSnapshot(snapshot = {}) {
   if (bon) {
     surfData.bonifacio = bon.surf
       ? { ...bon.surf, waterTemp: bon.waterTemp, surfHistory: bon.surfHistory || [] }
+      : null;
+  }
+
+  if (alistro) {
+    surfData.alistro = alistro.surf
+      ? { ...alistro.surf, waterTemp: alistro.waterTemp, surfHistory: alistro.surfHistory || [] }
       : null;
   }
 
@@ -168,6 +175,7 @@ export function useWeatherData() {
   const processMarine = useCallback((data) => {
     const rev = data.candhis_revellata;
     const bon = data.candhis_bonifacio;
+    const alistro = data.candhis_alistro;
     const esurf = data.esurfmar_ajaccio;
 
     if (rev) {
@@ -177,6 +185,7 @@ export function useWeatherData() {
     setSurfData({
       revellata: rev?.surf ? { ...rev.surf, waterTemp: rev.waterTemp, surfHistory: rev.surfHistory || [] } : null,
       bonifacio: bon?.surf ? { ...bon.surf, waterTemp: bon.waterTemp, surfHistory: bon.surfHistory || [] } : null,
+      alistro: alistro?.surf ? { ...alistro.surf, waterTemp: alistro.waterTemp, surfHistory: alistro.surfHistory || [] } : null,
       ajaccio: esurf ? { ...esurf, surfHistory: esurf.surfHistory || [] } : null,
     });
   }, []);

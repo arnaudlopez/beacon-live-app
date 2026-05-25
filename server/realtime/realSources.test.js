@@ -34,6 +34,7 @@ describe('real weather source adapters', () => {
       'pioupiou_1202',
       'candhis_revellata',
       'candhis_bonifacio',
+      'candhis_alistro',
       'esurfmar_ajaccio',
       'esurfmar_calvi',
       'windsup_porticcio',
@@ -70,6 +71,7 @@ describe('real weather source adapters', () => {
     expect(ids).toEqual(expect.arrayContaining([
       'pioupiou_1202',
       'candhis_revellata',
+      'candhis_alistro',
       'esurfmar_ajaccio',
       'wunderground_IGROSS105',
     ]));

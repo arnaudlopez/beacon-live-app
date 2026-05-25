@@ -538,6 +538,12 @@ export function createRealWeatherSources({
       fetchImpl,
       clock,
     })),
+    makeSource('candhis_alistro', defaultPollMs, () => fetchCandhis({
+      sourceId: 'candhis_alistro',
+      campaign: 'Y2FtcD0wMkIwNQ==',
+      fetchImpl,
+      clock,
+    })),
     makeSource('esurfmar_ajaccio', defaultPollMs, () => fetchESurfmar({
       sourceId: 'esurfmar_ajaccio',
       slug: 'ajaccio',

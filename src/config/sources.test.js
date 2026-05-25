@@ -62,9 +62,14 @@ describe('SOURCES configuration', () => {
 });
 
 describe('CANDHIS_STATIONS', () => {
-  it('has revellata and bonifacio stations', () => {
+  it('has all CANDHIS surf stations', () => {
     expect(CANDHIS_STATIONS).toHaveProperty('revellata');
     expect(CANDHIS_STATIONS).toHaveProperty('bonifacio');
+    expect(CANDHIS_STATIONS).toHaveProperty('alistro');
+    expect(CANDHIS_STATIONS.alistro).toMatchObject({
+      code: '02B05',
+      name: 'Alistro',
+    });
   });
 
   it('each station has required fields', () => {

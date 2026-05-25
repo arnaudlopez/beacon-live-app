@@ -19,6 +19,7 @@ const WIND_SOURCE_MAP = {
 const CANDHIS_SOURCE_MAP = {
   candhis_revellata: 'revellata',
   candhis_bonifacio: 'bonifacio',
+  candhis_alistro: 'alistro',
 };
 
 const ESURFMAR_SOURCE_MAP = {

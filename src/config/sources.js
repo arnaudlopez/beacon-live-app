@@ -24,7 +24,8 @@ export const SOURCES = [
 
 export const CANDHIS_STATIONS = {
   revellata: { id: 'Y2FtcD0wMkIwNA==', code: '02B04', name: 'La Revellata', coords: [42.569, 8.650] },
-  bonifacio: { id: 'Y2FtcD0wMkEwMQ==', code: '02A01', name: 'Bonifacio', coords: [41.323, 8.878] }
+  bonifacio: { id: 'Y2FtcD0wMkEwMQ==', code: '02A01', name: 'Bonifacio', coords: [41.323, 8.878] },
+  alistro: { id: 'Y2FtcD0wMkIwNQ==', code: '02B05', name: 'Alistro', coords: [42.2604, 9.64185] }
 };
 
 export const ESURFMAR_STATION = {

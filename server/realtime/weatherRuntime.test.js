@@ -141,6 +141,20 @@ describe('weather runtime realtime contract', () => {
         }),
       },
       {
+        id: 'candhis_alistro',
+        pollMs: 20_000,
+        fetch: vi.fn().mockResolvedValue({
+          source: 'candhis_alistro',
+          observedAt: '2026-05-25T08:00:00.000Z',
+          payload: {
+            waterTemp: 22.1,
+            waterHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), waterTemp: 22.1 }],
+            surf: { height: 0.2, hmax: 0.3, period: 3.5, direction: 21, spread: 26 },
+            surfHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), height: 0.2 }],
+          },
+        }),
+      },
+      {
         id: 'esurfmar_ajaccio',
         pollMs: 20_000,
         fetch: vi.fn().mockResolvedValue({
@@ -174,8 +188,13 @@ describe('weather runtime realtime contract', () => {
       height: 1.1,
       waterTemp: 19.4,
     });
+    expect(snapshot.surfData.alistro).toMatchObject({
+      height: 0.2,
+      waterTemp: 22.1,
+    });
     expect(snapshot.waterData.current).toBe(19.4);
     expect(snapshot.windData.candhis_revellata).toBeUndefined();
+    expect(snapshot.windData.candhis_alistro).toBeUndefined();
   });
 
   it('restores an initial snapshot and records persisted observations during polling', async () => {

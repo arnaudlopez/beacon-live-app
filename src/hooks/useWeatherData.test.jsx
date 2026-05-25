@@ -86,6 +86,11 @@ function legacyMarineSnapshot() {
         surf: { height: 0.8, hmax: 1.2, period: 7, direction: 250, spread: 40 },
         surfHistory: [],
       },
+      candhis_alistro: {
+        waterTemp: 22.1,
+        surf: { height: 0.2, hmax: 0.3, period: 3.5, direction: 21, spread: 26 },
+        surfHistory: [],
+      },
       ajaccio_buoy: {
         live: { windSpeed: 12, windGust: 18, windDirection: 270 },
         history: [],
@@ -253,6 +258,7 @@ describe('useWeatherData backend realtime mode', () => {
       waterTemp: 19.4,
     });
     expect(result.current.surfData.bonifacio.height).toBe(0.8);
+    expect(result.current.surfData.alistro.height).toBe(0.2);
     expect(result.current.surfData.ajaccio.height).toBe(1.2);
     expect(result.current.waterData.current).toBe(19.4);
 

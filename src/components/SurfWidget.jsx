@@ -41,11 +41,12 @@ const SPOT_WIND_MAP = {
   revellata: 'la_parata',       // La Parata is closest MF station
   ajaccio: 'ajaccio_buoy',      // Uses its own buoy data for precise offshore conditions
   bonifacio: 'lfkj',           // Fallback to Campo dell'Oro
+  alistro: 'owm-1202',
 };
 
 export default function SurfWidget({ surfData, windData }) {
   const [activeSpot, setActiveSpot] = useState('ajaccio');
-  const [timeAgo, setTimeAgo] = useState('');
+  const [now, setNow] = useState(() => Date.now());
 
   // Compute "time ago" — hooks must be before any early return
   const activeData = surfData?.[activeSpot];
@@ -54,24 +55,24 @@ export default function SurfWidget({ surfData, windData }) {
     : null;
 
   useEffect(() => {
-    if (!lastMeasurementTime) { setTimeAgo(''); return; }
-    const compute = () => {
-      const diffMs = Date.now() - lastMeasurementTime;
-      const diffMin = Math.floor(diffMs / 60000);
-      if (diffMin < 1) setTimeAgo("à l'instant");
-      else if (diffMin < 60) setTimeAgo(`il y a ${diffMin} min`);
-      else {
-        const h = Math.floor(diffMin / 60);
-        const m = diffMin % 60;
-        setTimeAgo(`il y a ${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`);
-      }
-    };
-    compute();
-    const id = setInterval(compute, 60000);
+    if (!lastMeasurementTime) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(id);
   }, [lastMeasurementTime]);
 
-  if (!surfData || (!surfData.revellata && !surfData.ajaccio && !surfData.bonifacio)) return null;
+  const timeAgo = lastMeasurementTime
+    ? (() => {
+        const diffMs = now - lastMeasurementTime;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return "à l'instant";
+        if (diffMin < 60) return `il y a ${diffMin} min`;
+        const h = Math.floor(diffMin / 60);
+        const m = diffMin % 60;
+        return `il y a ${h}h${m > 0 ? String(m).padStart(2, '0') : ''}`;
+      })()
+    : '';
+
+  if (!surfData || (!surfData.revellata && !surfData.ajaccio && !surfData.bonifacio && !surfData.alistro)) return null;
 
   const spots = [
     { 
@@ -111,6 +112,19 @@ export default function SurfWidget({ surfData, windData }) {
         { c: [41.310, 9.000], d: 1.1, s: 0.85 }, // E
         { c: [41.330, 9.100], d: 0.2, s: 0.7 }, // NE
         { c: [41.300, 8.500], d: 0.8, s: 0.95 } // Far W
+      ]
+    },
+    {
+      id: 'alistro', name: 'Alistro', coords: [42.2604, 9.64185], code: '02B05', data: surfData.alistro,
+      wavePoints: [
+        { c: [42.2604, 9.64185], d: 0, s: 1.1 },
+        { c: [42.320, 9.760], d: 0.3, s: 0.9 }, // NE
+        { c: [42.220, 9.770], d: 0.7, s: 0.95 }, // E
+        { c: [42.150, 9.720], d: 1.1, s: 0.8 }, // SE
+        { c: [42.360, 9.700], d: 0.5, s: 0.75 }, // N
+        { c: [42.090, 9.820], d: 1.4, s: 0.85 }, // Far SE
+        { c: [42.430, 9.760], d: 0.9, s: 0.9 }, // Far N
+        { c: [42.250, 9.500], d: 0.2, s: 0.8 } // Coastward
       ]
     }
   ];
