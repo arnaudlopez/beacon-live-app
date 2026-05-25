@@ -37,6 +37,10 @@ describe('real weather source adapters', () => {
       'esurfmar_ajaccio',
       'esurfmar_calvi',
       'windsup_porticcio',
+      'windsup_tonnara',
+      'windsup_piantarella',
+      'windsup_santa_manza',
+      'windsup_balistra',
       'wunderground_IGROSS105',
       'wunderground_ISARROLA7',
       'wunderground_ICORSEPR2',
@@ -59,6 +63,10 @@ describe('real weather source adapters', () => {
     expect(ids).not.toContain('meteofrance_20004002');
     expect(ids).not.toContain('meteofrance_20004003');
     expect(ids).not.toContain('windsup_porticcio');
+    expect(ids).not.toContain('windsup_tonnara');
+    expect(ids).not.toContain('windsup_piantarella');
+    expect(ids).not.toContain('windsup_santa_manza');
+    expect(ids).not.toContain('windsup_balistra');
     expect(ids).toEqual(expect.arrayContaining([
       'pioupiou_1202',
       'candhis_revellata',

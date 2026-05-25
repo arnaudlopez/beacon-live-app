@@ -570,14 +570,22 @@ export function createRealWeatherSources({
   }
 
   if (env.WINDSUP_USER && env.WINDSUP_PASS) {
-    sources.push(makeSource('windsup_porticcio', fastPollMs, () => fetchWindsUp({
-      sourceId: 'windsup_porticcio',
-      spotId: '1726',
-      user: env.WINDSUP_USER,
-      password: env.WINDSUP_PASS,
-      fetchImpl,
-      clock,
-    })));
+    for (const [sourceId, spotId] of [
+      ['windsup_porticcio', '1726'],
+      ['windsup_tonnara', '51'],
+      ['windsup_piantarella', '1659'],
+      ['windsup_santa_manza', '1549'],
+      ['windsup_balistra', '1693'],
+    ]) {
+      sources.push(makeSource(sourceId, fastPollMs, () => fetchWindsUp({
+        sourceId,
+        spotId,
+        user: env.WINDSUP_USER,
+        password: env.WINDSUP_PASS,
+        fetchImpl,
+        clock,
+      })));
+    }
   }
 
   return sources;

@@ -2,6 +2,10 @@ const WIND_SOURCE_MAP = {
   meteofrance_20004002: 'lfkj',
   meteofrance_20004003: 'la_parata',
   windsup_porticcio: 'porticcio',
+  windsup_tonnara: 'la_tonnara',
+  windsup_piantarella: 'piantarella',
+  windsup_santa_manza: 'santa_manza',
+  windsup_balistra: 'balistra',
   wunderground_IGROSS105: 'porticcio_haut',
   wunderground_ISARROLA7: 'mezzavia',
   wunderground_ICORSEPR2: 'propriano',
@@ -10,6 +14,15 @@ const WIND_SOURCE_MAP = {
   esurfmar_ajaccio: 'ajaccio_buoy',
   esurfmar_calvi: 'calvi_buoy',
   pioupiou_1202: 'owm-1202',
+};
+
+const CANDHIS_SOURCE_MAP = {
+  candhis_revellata: 'revellata',
+  candhis_bonifacio: 'bonifacio',
+};
+
+const ESURFMAR_SOURCE_MAP = {
+  esurfmar_ajaccio: 'ajaccio',
 };
 
 function stableStringify(value) {
@@ -62,8 +75,7 @@ export function createWeatherRuntime({ clock, sources, initialSnapshot, store })
 
   for (const source of sources) {
     const sourceState = createInitialSourceState();
-    const appSourceId = WIND_SOURCE_MAP[source.id] || source.id;
-    const initialPayload = snapshot.windData[appSourceId];
+    const initialPayload = getPayloadForSource(source.id);
     if (initialPayload !== undefined) {
       sourceState.hash = stableStringify(initialPayload);
     }
@@ -111,14 +123,77 @@ export function createWeatherRuntime({ clock, sources, initialSnapshot, store })
     }
   }
 
-  function mergeReading(sourceId, sourceState, reading) {
+  function getPayloadForSource(sourceId) {
+    const windSourceId = WIND_SOURCE_MAP[sourceId];
+    if (windSourceId) return snapshot.windData[windSourceId];
+
+    const candhisSpotId = CANDHIS_SOURCE_MAP[sourceId];
+    if (candhisSpotId) {
+      return snapshot.surfData[candhisSpotId] ?? snapshot.windData[sourceId];
+    }
+
+    const esurfmarSpotId = ESURFMAR_SOURCE_MAP[sourceId];
+    if (esurfmarSpotId) {
+      return snapshot.surfData[esurfmarSpotId] ?? snapshot.windData[WIND_SOURCE_MAP[sourceId]];
+    }
+
+    return snapshot.windData[sourceId];
+  }
+
+  function mergeCandhisPayload(sourceId, payload) {
+    const spotId = CANDHIS_SOURCE_MAP[sourceId];
+    if (!spotId) return false;
+
+    snapshot.surfData[spotId] = payload?.surf
+      ? {
+          ...clone(payload.surf),
+          waterTemp: payload.waterTemp ?? null,
+          surfHistory: clone(payload.surfHistory) ?? [],
+        }
+      : null;
+
+    if (sourceId === 'candhis_revellata') {
+      snapshot.waterData = {
+        current: payload?.waterTemp ?? null,
+        history: clone(payload?.waterHistory) ?? [],
+      };
+    }
+
+    delete snapshot.windData[sourceId];
+    return true;
+  }
+
+  function mergeESurfmarPayload(sourceId, payload) {
+    const windSourceId = WIND_SOURCE_MAP[sourceId];
+    const surfSpotId = ESURFMAR_SOURCE_MAP[sourceId];
+
+    if (windSourceId && payload?.live) {
+      snapshot.windData[windSourceId] = clone(payload);
+    }
+
+    if (surfSpotId) {
+      snapshot.surfData[surfSpotId] = clone(payload);
+    }
+
+    return Boolean(windSourceId || surfSpotId);
+  }
+
+  function mergePayload(sourceId, payload) {
+    if (CANDHIS_SOURCE_MAP[sourceId]) return mergeCandhisPayload(sourceId, payload);
+    if (sourceId.startsWith('esurfmar_')) return mergeESurfmarPayload(sourceId, payload);
+
     const appSourceId = WIND_SOURCE_MAP[sourceId] || sourceId;
+    snapshot.windData[appSourceId] = clone(payload);
+    return true;
+  }
+
+  function mergeReading(sourceId, sourceState, reading) {
     const payload = reading?.payload ?? reading;
     const hash = stableStringify(payload);
     const changed = hash !== sourceState.hash;
 
     if (changed) {
-      snapshot.windData[appSourceId] = clone(payload);
+      mergePayload(sourceId, payload);
       sourceState.hash = hash;
     }
 

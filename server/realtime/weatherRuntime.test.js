@@ -118,6 +118,66 @@ describe('weather runtime realtime contract', () => {
     });
   });
 
+  it('routes all dashboard source families into their UI buckets', async () => {
+    const clock = makeClock();
+    const sources = [
+      {
+        id: 'windsup_tonnara',
+        pollMs: 20_000,
+        fetch: vi.fn().mockResolvedValue(reading('windsup_tonnara', '2026-05-25T08:00:00.000Z', 11)),
+      },
+      {
+        id: 'candhis_revellata',
+        pollMs: 20_000,
+        fetch: vi.fn().mockResolvedValue({
+          source: 'candhis_revellata',
+          observedAt: '2026-05-25T08:00:00.000Z',
+          payload: {
+            waterTemp: 19.4,
+            waterHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), waterTemp: 19.4 }],
+            surf: { height: 1.1, hmax: 1.7, period: 8, direction: 260, spread: 35 },
+            surfHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), height: 1.1 }],
+          },
+        }),
+      },
+      {
+        id: 'esurfmar_ajaccio',
+        pollMs: 20_000,
+        fetch: vi.fn().mockResolvedValue({
+          source: 'esurfmar_ajaccio',
+          observedAt: '2026-05-25T08:00:00.000Z',
+          payload: {
+            live: {
+              windSpeed: 12,
+              windGust: 18,
+              windDirection: 270,
+            },
+            history: [],
+            height: 1.2,
+            hmax: 1.8,
+            period: 8,
+            direction: 270,
+            surfHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), height: 1.2 }],
+          },
+        }),
+      },
+    ];
+    const runtime = createWeatherRuntime({ clock, sources });
+
+    await runtime.pollDueSources();
+
+    const snapshot = runtime.getSnapshot();
+    expect(snapshot.windData.la_tonnara.live.windSpeed).toBe(11);
+    expect(snapshot.windData.ajaccio_buoy.live.windSpeed).toBe(12);
+    expect(snapshot.surfData.ajaccio.height).toBe(1.2);
+    expect(snapshot.surfData.revellata).toMatchObject({
+      height: 1.1,
+      waterTemp: 19.4,
+    });
+    expect(snapshot.waterData.current).toBe(19.4);
+    expect(snapshot.windData.candhis_revellata).toBeUndefined();
+  });
+
   it('restores an initial snapshot and records persisted observations during polling', async () => {
     const clock = makeClock();
     const initialSnapshot = {

@@ -71,6 +71,37 @@ function snapshot(windSpeed) {
   };
 }
 
+function legacyMarineSnapshot() {
+  return {
+    ts: '2026-05-25T08:00:00.000Z',
+    windData: {
+      candhis_revellata: {
+        waterTemp: 19.4,
+        waterHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), waterTemp: 19.4 }],
+        surf: { height: 1.1, hmax: 1.7, period: 8, direction: 260, spread: 35 },
+        surfHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), height: 1.1 }],
+      },
+      candhis_bonifacio: {
+        waterTemp: 20.1,
+        surf: { height: 0.8, hmax: 1.2, period: 7, direction: 250, spread: 40 },
+        surfHistory: [],
+      },
+      ajaccio_buoy: {
+        live: { windSpeed: 12, windGust: 18, windDirection: 270 },
+        history: [],
+        height: 1.2,
+        hmax: 1.8,
+        period: 8,
+        direction: 270,
+        surfHistory: [{ time: Date.parse('2026-05-25T08:00:00.000Z'), height: 1.2 }],
+      },
+    },
+    surfData: {},
+    waterData: null,
+    sourceHealth: {},
+  };
+}
+
 function jsonResponse(body) {
   return {
     ok: true,
@@ -205,6 +236,25 @@ describe('useWeatherData backend realtime mode', () => {
 
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/weather', expect.any(Object));
     expect(MockEventSource.instances[0].url).toBe('/api/events');
+
+    unmount();
+  });
+
+  it('normalizes marine data from persisted backend snapshots into surf and water state', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(legacyMarineSnapshot()));
+    const { useWeatherData } = await importHook();
+
+    const { result, unmount } = renderWeatherHook(useWeatherData);
+
+    await waitForAssertion(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.surfData.revellata).toMatchObject({
+      height: 1.1,
+      waterTemp: 19.4,
+    });
+    expect(result.current.surfData.bonifacio.height).toBe(0.8);
+    expect(result.current.surfData.ajaccio.height).toBe(1.2);
+    expect(result.current.waterData.current).toBe(19.4);
 
     unmount();
   });

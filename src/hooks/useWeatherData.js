@@ -72,6 +72,39 @@ function normalizeBackendApiUrl(url) {
   return backendUrl.endsWith('/api') ? backendUrl : `${backendUrl}/api`;
 }
 
+function normalizeBackendSnapshot(snapshot = {}) {
+  const windData = snapshot.windData || {};
+  const surfData = { ...(snapshot.surfData || {}) };
+  let waterData = snapshot.waterData || null;
+
+  const rev = surfData.revellata ? null : windData.candhis_revellata;
+  const bon = surfData.bonifacio ? null : windData.candhis_bonifacio;
+  const ajaccio = surfData.ajaccio ? null : windData.ajaccio_buoy;
+
+  if (rev) {
+    surfData.revellata = rev.surf
+      ? { ...rev.surf, waterTemp: rev.waterTemp, surfHistory: rev.surfHistory || [] }
+      : null;
+    waterData = waterData || { current: rev.waterTemp, history: rev.waterHistory || [] };
+  }
+
+  if (bon) {
+    surfData.bonifacio = bon.surf
+      ? { ...bon.surf, waterTemp: bon.waterTemp, surfHistory: bon.surfHistory || [] }
+      : null;
+  }
+
+  if (ajaccio) {
+    surfData.ajaccio = { ...ajaccio, surfHistory: ajaccio.surfHistory || [] };
+  }
+
+  return {
+    windData,
+    surfData,
+    waterData,
+  };
+}
+
 export function useWeatherData() {
   const [windData, setWindData] = useState({});
   const [surfData, setSurfData] = useState({});
@@ -91,9 +124,10 @@ export function useWeatherData() {
   }, []);
 
   const applyBackendSnapshot = useCallback((snapshot, realtime = false) => {
-    setWindData(snapshot.windData || {});
-    setSurfData(snapshot.surfData || {});
-    setWaterData(snapshot.waterData || null);
+    const normalized = normalizeBackendSnapshot(snapshot);
+    setWindData(normalized.windData);
+    setSurfData(normalized.surfData);
+    setWaterData(normalized.waterData);
     setLastUpdated(snapshot.ts ? new Date(snapshot.ts) : new Date());
     setError('');
     setIsLoading(false);
