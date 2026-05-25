@@ -2,7 +2,7 @@ version: 2
 goal:
   slug: "beacon-live-real-node-adapters-notes"
   title: "Beacon Live Real Node Adapters - Notes"
-  status: active
+  status: complete
   created_at: "2026-05-25"
   updated_at: "2026-05-25"
   kind: specific
@@ -76,7 +76,7 @@ agents:
   worker: installed
   judge: installed
 
-active_task: T999
+active_task: null
 tasks:
   - id: T001
     type: scout
@@ -531,7 +531,7 @@ tasks:
   - id: T999
     type: judge
     assignee: Judge
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Audit whether the full original outcome is complete."
     inputs:
@@ -557,4 +557,46 @@ tasks:
       - "full_outcome_complete: true | false"
       - "missing evidence"
       - "next task if not complete"
-    receipt: null
+    receipt:
+      result: done
+      decision: approved
+      summary: "Final audit complete: the branch is ready for Portainer redeploy once credentials are added. Real Node adapters are implemented, demo fallback remains, /api contract is preserved, docs/env list exact variables, verification passed, and changes were pushed."
+      design_delta: "The Docker weather-api is no longer demo-only. It can run with WEATHER_SOURCE_MODE=real and server-side credentials for Météo-France and optional WindsUp, while WEATHER_SOURCE_MODE=demo remains available for no-secret smoke. No secret is exposed through Vite/browser env vars."
+      workflow_safeguards:
+        design_concept: true
+        ubiquitous_language: true
+        feedback_policy: true
+        test_strategy: true
+        module_map: true
+        interface_contract: true
+        architecture_review: true
+        design_delta: true
+        impact_assessment: true
+        shipping_proof: true
+      architecture_review: "Real adapters are isolated in server/realtime/realSources.js with injectable fetch/env/clock. Tests cover credential gating, parsing fixtures, server source-mode wiring, and Portainer config docs. Docker Compose defaults WEATHER_SOURCE_MODE to real and wires METEOFRANCE_KEY, WINDSUP_USER, WINDSUP_PASS, and optional WUNDERGROUND_API_KEY into weather-api only."
+      complete: complete
+      full_outcome_complete: true
+      missing_evidence:
+        []
+      portainer_variables_to_add:
+        - "VITE_WEATHER_BACKEND_URL=/api"
+        - "WEATHER_SOURCE_MODE=real"
+        - "WEATHER_POLL_MS=20000"
+        - "WEATHER_HEARTBEAT_MS=15000"
+        - "METEOFRANCE_KEY=<your key>"
+        - "WINDSUP_USER=<optional WindsUp login>"
+        - "WINDSUP_PASS=<optional WindsUp password>"
+        - "WUNDERGROUND_API_KEY=<optional override; can be blank>"
+      verify:
+        - "npm test passed: 17 files, 161 tests"
+        - "targeted eslint passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed"
+        - "Node demo smoke /api/health returned 200 ok"
+        - "git push passed to origin/codex/beacon-live-docker-realtime-product"
+      shipping:
+        commits:
+          - b1dcef1
+          - 43e1685
+        remote_branch: origin/codex/beacon-live-docker-realtime-product
+        push_result: pushed
