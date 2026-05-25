@@ -26,6 +26,9 @@ describe('realtime Docker deployment config', () => {
     expect(compose).toContain('METEOFRANCE_KEY=${METEOFRANCE_KEY:-}');
     expect(compose).toContain('WINDSUP_USER=${WINDSUP_USER:-}');
     expect(compose).toContain('WINDSUP_PASS=${WINDSUP_PASS:-}');
+    expect(compose).toContain('WEATHER_MAX_OBSERVATIONS=${WEATHER_MAX_OBSERVATIONS:-500}');
+    expect(compose).toContain('max-size: "10m"');
+    expect(compose).toContain('max-file: "3"');
     expect(compose).toContain('weather-data:');
     expect(compose).toContain('VITE_WEATHER_BACKEND_URL=${VITE_WEATHER_BACKEND_URL:-/api}');
   });
@@ -50,12 +53,15 @@ describe('realtime Docker deployment config', () => {
     expect(docs).toContain('WINDSUP_PASS');
     expect(docs).toContain('/api/health');
     expect(docs).toContain('WEATHER_POLL_MS');
+    expect(docs).toContain('WEATHER_MAX_OBSERVATIONS=500');
+    expect(docs).toContain('docker system prune -af');
   });
 
   it('shows Portainer variables in the env example without leaking them to Vite', async () => {
     const envExample = await readProjectFile('.env.example');
 
     expect(envExample).toContain('WEATHER_SOURCE_MODE=real');
+    expect(envExample).toContain('WEATHER_MAX_OBSERVATIONS=500');
     expect(envExample).toContain('METEOFRANCE_KEY=');
     expect(envExample).toContain('WINDSUP_USER=');
     expect(envExample).toContain('WINDSUP_PASS=');

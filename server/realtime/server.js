@@ -13,6 +13,7 @@ const DEFAULT_PORT = 8787;
 const DEFAULT_INTERVAL_MS = 20_000;
 const DEFAULT_HEARTBEAT_MS = 15_000;
 const DEFAULT_SOURCE_MODE = 'demo';
+const DEFAULT_MAX_OBSERVATIONS = 500;
 
 export function createSystemClock() {
   return {
@@ -39,6 +40,7 @@ export async function createWeatherService({
   storePath = defaultStorePath(),
   intervalMs = DEFAULT_INTERVAL_MS,
   heartbeatMs = DEFAULT_HEARTBEAT_MS,
+  maxObservations = DEFAULT_MAX_OBSERVATIONS,
   sourceMode = DEFAULT_SOURCE_MODE,
   env = globalThis.process?.env ?? {},
   fetchImpl = globalThis.fetch,
@@ -46,7 +48,7 @@ export async function createWeatherService({
     ? createRealWeatherSources({ clock, env, fetchImpl, pollMs: intervalMs })
     : createDemoWeatherSources({ clock, pollMs: intervalMs }),
 } = {}) {
-  const store = createFileWeatherStore({ filePath: storePath });
+  const store = createFileWeatherStore({ filePath: storePath, maxObservations });
   const persisted = await store.loadState();
   const runtime = createWeatherRuntime({
     clock,
@@ -94,6 +96,7 @@ async function main() {
     storePath: env.WEATHER_STORE_PATH || defaultStorePath(),
     intervalMs: Number(env.WEATHER_POLL_MS || DEFAULT_INTERVAL_MS),
     heartbeatMs: Number(env.WEATHER_HEARTBEAT_MS || DEFAULT_HEARTBEAT_MS),
+    maxObservations: Number(env.WEATHER_MAX_OBSERVATIONS || DEFAULT_MAX_OBSERVATIONS),
     sourceMode: env.WEATHER_SOURCE_MODE || DEFAULT_SOURCE_MODE,
     env,
   });

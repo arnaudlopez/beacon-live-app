@@ -75,6 +75,29 @@ describe('weather service entrypoint contract', () => {
     }
   });
 
+  it('passes the observation retention limit to the persistent store', async () => {
+    const storePath = await makeStorePath();
+    const service = await createWeatherService({
+      clock: makeClock(),
+      host: '127.0.0.1',
+      port: 0,
+      storePath,
+      intervalMs: 20_000,
+      heartbeatMs: 50,
+      maxObservations: 1,
+    });
+
+    const { baseUrl } = await service.start();
+
+    try {
+      await waitForJson(`${baseUrl}/api/weather`, (payload) => Boolean(payload.windData?.porticcio?.live?.windSpeed));
+      const persisted = JSON.parse(await readFile(storePath, 'utf8'));
+      expect(persisted.observations).toHaveLength(1);
+    } finally {
+      await service.stop();
+    }
+  });
+
   it('can run in real-source mode with mocked upstream fetchers and no browser-exposed secrets', async () => {
     const storePath = await makeStorePath();
     const fetchImpl = vi.fn(async (url) => {

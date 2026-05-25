@@ -69,4 +69,25 @@ describe('file weather store contract', () => {
       },
     ]);
   });
+
+  it('caps persisted observations to avoid unbounded disk growth', async () => {
+    const filePath = await makeStorePath();
+    const store = createFileWeatherStore({ filePath, maxObservations: 3 });
+
+    for (let index = 0; index < 5; index += 1) {
+      await store.appendObservation({
+        sourceId: `source_${index}`,
+        receivedAt: `2026-05-25T08:00:0${index}.000Z`,
+        payload: { value: index },
+      });
+    }
+
+    const state = await store.loadState();
+
+    expect(state.observations.map((item) => item.sourceId)).toEqual([
+      'source_2',
+      'source_3',
+      'source_4',
+    ]);
+  });
 });

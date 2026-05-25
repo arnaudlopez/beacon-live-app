@@ -83,6 +83,14 @@ Le service `weather-api` écrit son état dans le volume Docker `weather-data`, 
 
 Ce fichier contient le dernier snapshot, les observations reçues et l'état de santé des sources. Il permet au backend de repartir avec une donnée visible après redémarrage.
 
+Pour éviter une croissance sans limite, `weather-api` ne conserve que les dernières observations dans ce fichier. La limite par défaut est :
+
+```env
+WEATHER_MAX_OBSERVATIONS=500
+```
+
+Les logs Docker des deux services sont aussi bornés par rotation (`10m` x `3` fichiers par conteneur).
+
 ## Architecture Docker
 
 Le `Dockerfile` fournit deux targets :
@@ -102,4 +110,11 @@ Pour supprimer aussi l'historique local :
 
 ```bash
 docker compose down -v
+```
+
+Après plusieurs redeploys Portainer, Docker peut garder d'anciennes images et du cache de build. À faire ponctuellement depuis le serveur si l'espace disque baisse :
+
+```bash
+docker system prune -af
+docker builder prune -af
 ```

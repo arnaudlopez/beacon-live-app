@@ -2,6 +2,8 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
+const DEFAULT_MAX_OBSERVATIONS = 500;
+
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
@@ -15,25 +17,36 @@ function emptyState() {
   };
 }
 
-function normalizeState(value) {
+function normalizeMaxObservations(value) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_MAX_OBSERVATIONS;
+}
+
+function trimObservations(observations, maxObservations) {
+  if (!Array.isArray(observations)) return [];
+  return observations.slice(-maxObservations);
+}
+
+function normalizeState(value, maxObservations = DEFAULT_MAX_OBSERVATIONS) {
   return {
     ...emptyState(),
     ...value,
     snapshot: value?.snapshot ?? null,
-    observations: Array.isArray(value?.observations) ? value.observations : [],
+    observations: trimObservations(value?.observations, maxObservations),
     sourceHealth: value?.sourceHealth ?? value?.snapshot?.sourceHealth ?? {},
   };
 }
 
-export function createFileWeatherStore({ filePath }) {
+export function createFileWeatherStore({ filePath, maxObservations = DEFAULT_MAX_OBSERVATIONS }) {
   if (!filePath) {
     throw new Error('createFileWeatherStore requires a filePath');
   }
+  const observationLimit = normalizeMaxObservations(maxObservations);
 
   async function loadState() {
     try {
       const payload = await readFile(filePath, 'utf8');
-      return normalizeState(JSON.parse(payload));
+      return normalizeState(JSON.parse(payload), observationLimit);
     } catch (error) {
       if (error?.code === 'ENOENT') return emptyState();
       throw error;
@@ -42,7 +55,7 @@ export function createFileWeatherStore({ filePath }) {
 
   async function writeState(state) {
     await mkdir(dirname(filePath), { recursive: true });
-    const nextState = normalizeState(state);
+    const nextState = normalizeState(state, observationLimit);
     const tempPath = `${filePath}.${randomUUID()}.tmp`;
     await writeFile(tempPath, `${JSON.stringify(nextState, null, 2)}\n`, 'utf8');
     await rename(tempPath, filePath);
@@ -64,7 +77,7 @@ export function createFileWeatherStore({ filePath }) {
     const nextObservation = clone(observation);
     await writeState({
       ...state,
-      observations: [...state.observations, nextObservation],
+      observations: trimObservations([...state.observations, nextObservation], observationLimit),
       updatedAt: nextObservation?.receivedAt ?? new Date().toISOString(),
     });
   }
