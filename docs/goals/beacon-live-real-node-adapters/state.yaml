@@ -76,7 +76,7 @@ agents:
   worker: installed
   judge: installed
 
-active_task: T998
+active_task: T999
 tasks:
   - id: T001
     type: scout
@@ -481,7 +481,7 @@ tasks:
   - id: T998
     type: pm
     assignee: PM
-    status: active
+    status: done
     objective: "Commit all goal-related changes and push the current branch once verification is green."
     inputs:
       - "Approved implementation and verification receipts"
@@ -502,11 +502,36 @@ tasks:
       - "push_result"
       - "committed_files"
       - "unrelated_dirty_files_left_untouched"
-    receipt: null
+    receipt:
+      result: done
+      summary: "Committed and pushed real Node adapter deploy-readiness changes. Unrelated dirty files were left untouched."
+      commit_sha: b1dcef1ab0389a76818c3b0058b40606d58eb0c5
+      remote_branch: origin/codex/beacon-live-docker-realtime-product
+      push_result: "pushed to existing branch"
+      committed_files:
+        - server/realtime/realSources.js
+        - server/realtime/realSources.test.js
+        - server/realtime/server.js
+        - server/realtime/server.test.js
+        - server/realtime/deploymentConfig.test.js
+        - docker-compose.yml
+        - DEPLOY_DOCKER.md
+        - .env.example
+        - "docs/goals/beacon-live-real-node-adapters/**"
+      unrelated_dirty_files_left_untouched:
+        - .claude/
+        - docs/goals/beacon-live-realtime-docker-golden-state/.goalbuddy-board/
+      verify:
+        - "npm test passed: 17 files, 161 tests"
+        - "targeted eslint passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed"
+        - "Node demo smoke /api/health returned 200 ok"
+        - "git push passed"
   - id: T999
     type: judge
     assignee: Judge
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Audit whether the full original outcome is complete."
     inputs:
