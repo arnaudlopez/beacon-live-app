@@ -145,7 +145,7 @@ export default function SurfWidget({ surfData, windData }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <h3 className="widget-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
             <Waves size={20} style={{ color: 'var(--accent-cyan)' }}/> 
-            🏄 Conditions Surf — {current?.name}
+            🏄 Conditions Surf — {current?.name}{current?.code ? ` (${current.code})` : ''}
           </h3>
           {timeAgo && (
             <span style={{
