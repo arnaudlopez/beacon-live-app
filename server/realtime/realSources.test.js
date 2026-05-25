@@ -177,4 +177,45 @@ describe('real weather source adapters', () => {
       windDirection: 275,
     });
   });
+
+  it('authenticates WindsUp through the current premium session flow', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response('', {
+        status: 302,
+        headers: { 'set-cookie': 'PHPSESSID=initial; Path=/' },
+      }))
+      .mockResolvedValueOnce(new Response('', {
+        status: 302,
+        headers: { 'set-cookie': 'codeCnx=code; Path=/, autolog=auto; Path=/' },
+      }))
+      .mockResolvedValueOnce(new Response(`
+        <div class="spotObsLine"><span>10:00</span><div class="deg">275</div></div>
+        {x:1779696000000,y:11,o:"O",color:"#fff",img:""}
+        {x:1779696000000,low:8,high:17}
+      `));
+
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      env: {
+        WINDSUP_USER: 'porticcio-user',
+        WINDSUP_PASS: 'porticcio-pass',
+      },
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'windsup_porticcio');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      source: 'windsup_porticcio',
+      payload: {
+        live: {
+          windSpeed: 11,
+          windGust: 17,
+          windDirection: 275,
+        },
+      },
+    });
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://www.winds-up.com/connexion');
+    expect(fetchImpl.mock.calls[1][0]).toBe('https://www.winds-up.com/v2/');
+    expect(fetchImpl.mock.calls[2][0]).toBe('https://www.winds-up.com/spot/1726');
+  });
 });

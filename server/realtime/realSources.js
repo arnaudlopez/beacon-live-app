@@ -413,12 +413,48 @@ async function fetchWunderground({ sourceId, stationId, apiKey, fetchImpl, clock
   return sourceReading(sourceId, clock, parseWundergroundPayload(liveJson, historyJson));
 }
 
+const WINDSUP_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const WINDSUP_BASE_URL = 'https://www.winds-up.com';
+
+function parseSetCookie(header, jar) {
+  if (!header) return;
+  const parts = header.split(/,(?=\s*[A-Za-z0-9_-]+=)/);
+  for (const part of parts) {
+    const match = part.trim().match(/^([^=;\s]+)=([^;]*)/);
+    if (match) jar[match[1]] = match[2];
+  }
+}
+
+function jarToHeader(jar) {
+  return Object.entries(jar).map(([key, value]) => `${key}=${value}`).join('; ');
+}
+
 async function fetchWindsUp({ sourceId, spotId, user, password, fetchImpl, clock }) {
-  const mobileBase = 'https://m.winds-up.com';
-  const authResponse = await fetchImpl(`${mobileBase}/index.php`, {
+  const commonHeaders = {
+    'User-Agent': WINDSUP_USER_AGENT,
+    Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
+  };
+  const jar = {};
+
+  const initResponse = await fetchImpl(`${WINDSUP_BASE_URL}/connexion`, {
+    headers: commonHeaders,
+    redirect: 'manual',
+  });
+  if (!initResponse.ok && initResponse.status !== 302) {
+    throw new Error(`windsup_init_${initResponse.status}`);
+  }
+  parseSetCookie(initResponse.headers?.get?.('set-cookie') || '', jar);
+
+  const authResponse = await fetchImpl(`${WINDSUP_BASE_URL}/v2/`, {
     method: 'POST',
     headers: {
+      ...commonHeaders,
       'Content-Type': 'application/x-www-form-urlencoded',
+      Origin: WINDSUP_BASE_URL,
+      Referer: `${WINDSUP_BASE_URL}/connexion`,
+      Cookie: jarToHeader(jar),
+      'Upgrade-Insecure-Requests': '1',
     },
     body: `action=log&pseudo=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}&submit=submit-value`,
     redirect: 'manual',
@@ -426,13 +462,13 @@ async function fetchWindsUp({ sourceId, spotId, user, password, fetchImpl, clock
   if (!authResponse.ok && authResponse.status !== 302) {
     throw new Error(`windsup_auth_${authResponse.status}`);
   }
-  const cookieHeader = authResponse.headers?.get?.('set-cookie') || '';
-  const sessionMatch = cookieHeader.match(/PHPSESSID=([^;]+)/);
-  if (!sessionMatch) throw new Error('windsup_missing_session');
-  const cookie = `PHPSESSID=${sessionMatch[1]}`;
-  const html = await readText(await fetchImpl(`${mobileBase}/spot/${spotId}`, {
+  parseSetCookie(authResponse.headers?.get?.('set-cookie') || '', jar);
+  if (!jar.codeCnx || !jar.autolog) throw new Error('windsup_missing_premium_session');
+
+  const html = await readText(await fetchImpl(`${WINDSUP_BASE_URL}/spot/${spotId}`, {
     headers: {
-      Cookie: cookie,
+      ...commonHeaders,
+      Cookie: jarToHeader(jar),
     },
   }));
   return sourceReading(sourceId, clock, parseWindsUpMobileHtml(html));

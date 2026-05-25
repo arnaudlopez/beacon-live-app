@@ -101,15 +101,22 @@ export default function Dashboard() {
 
   const notifications = useNotifications(windData);
 
+  const fallbackSource = useMemo(() => {
+    if (isLoading || windData[activeSource.id]?.live) return null;
+    return SOURCES.find(source => windData[source.id]?.live) || null;
+  }, [activeSource.id, isLoading, windData]);
+
+  const displaySource = fallbackSource || activeSource;
+
   // --- Derived data ---
   const weatherData = useMemo(() => {
-    const activeData = windData[activeSource.id];
+    const activeData = windData[displaySource.id];
     if (!activeData || !activeData.live) return null;
     return activeData.live;
-  }, [windData, activeSource.id]);
+  }, [windData, displaySource.id]);
 
   const historyData = useMemo(() => {
-    const activeData = windData[activeSource.id];
+    const activeData = windData[displaySource.id];
     if (!activeData || !activeData.history) return [];
 
     const mergedHistory = activeData.history.map(h => ({ ...h }));
@@ -128,7 +135,7 @@ export default function Dashboard() {
       });
     }
     return mergedHistory;
-  }, [windData, activeSource.id, waterData]);
+  }, [windData, displaySource.id, waterData]);
 
   // Persist active source
   useEffect(() => {
@@ -139,16 +146,16 @@ export default function Dashboard() {
   const errorMessage = useMemo(() => {
     if (isLoading) return '';
     if (fetchError) return fetchError;
-    const activeData = windData[activeSource.id];
+    const activeData = windData[displaySource.id];
     if (!activeData || !activeData.live) {
       if (Object.values(windData).some(v => v !== null)) {
-        return `${activeSource.name} : données indisponibles`;
+        return `${displaySource.name} : données indisponibles`;
       }
     }
     return '';
-  }, [windData, activeSource.id, activeSource.name, isLoading, fetchError]);
+  }, [windData, displaySource.id, displaySource.name, isLoading, fetchError]);
 
-  const currentAlertSettings = notifications.settings[activeSource.id] || notifications.DEFAULT_SETTINGS;
+  const currentAlertSettings = notifications.settings[displaySource.id] || notifications.DEFAULT_SETTINGS;
   const beaufort = weatherData ? getBeaufort(weatherData.windGust) : null;
   const isLocked = currentAlertSettings.enabled;
 
@@ -165,7 +172,7 @@ export default function Dashboard() {
       <header className="dashboard-header">
         <div className="dashboard-subtitle">
           <div className="live-dot" role="status" aria-label="Indicateur temps réel"></div>
-          {activeSource.name}
+          {displaySource.name}
         </div>
         <h1 className="dashboard-title">🌊 Beacon Live</h1>
       </header>
@@ -174,10 +181,10 @@ export default function Dashboard() {
         {SOURCES.map(source => (
           <button
             key={source.id}
-            className={`source-toggle-btn ${activeSource.id === source.id ? 'active' : ''}`}
+            className={`source-toggle-btn ${displaySource.id === source.id ? 'active' : ''}`}
             onClick={() => setActiveSource(source)}
             disabled={isLoading}
-            aria-pressed={activeSource.id === source.id}
+            aria-pressed={displaySource.id === source.id}
           >
             {source.name}
           </button>
@@ -191,13 +198,13 @@ export default function Dashboard() {
           <button
             className={`source-toggle-btn ${currentAlertSettings.avgEnabled ? 'active' : ''}`}
             style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', minWidth: 'unset' }}
-            onClick={() => notifications.update(activeSource.id, { avgEnabled: !currentAlertSettings.avgEnabled })}
+            onClick={() => notifications.update(displaySource.id, { avgEnabled: !currentAlertSettings.avgEnabled })}
             disabled={isLocked}
           >Moy</button>
           <input
             type="number"
             value={currentAlertSettings.avgThreshold}
-            onChange={(e) => notifications.update(activeSource.id, { avgThreshold: Number(e.target.value) })}
+            onChange={(e) => notifications.update(displaySource.id, { avgThreshold: Number(e.target.value) })}
             style={thresholdInputStyle(currentAlertSettings.avgEnabled)}
             disabled={isLocked || !currentAlertSettings.avgEnabled}
             min={1} max={100}
@@ -207,13 +214,13 @@ export default function Dashboard() {
           <button
             className={`source-toggle-btn ${currentAlertSettings.gustEnabled ? 'active' : ''}`}
             style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem', minWidth: 'unset' }}
-            onClick={() => notifications.update(activeSource.id, { gustEnabled: !currentAlertSettings.gustEnabled })}
+            onClick={() => notifications.update(displaySource.id, { gustEnabled: !currentAlertSettings.gustEnabled })}
             disabled={isLocked}
           >Raf</button>
           <input
             type="number"
             value={currentAlertSettings.gustThreshold}
-            onChange={(e) => notifications.update(activeSource.id, { gustThreshold: Number(e.target.value) })}
+            onChange={(e) => notifications.update(displaySource.id, { gustThreshold: Number(e.target.value) })}
             style={thresholdInputStyle(currentAlertSettings.gustEnabled)}
             disabled={isLocked || !currentAlertSettings.gustEnabled}
             min={1} max={100}
@@ -229,7 +236,7 @@ export default function Dashboard() {
             let allMet = true;
             if (ss.gustEnabled && gust < ss.gustThreshold) allMet = false;
             if (ss.avgEnabled && avg < ss.avgThreshold) allMet = false;
-            const isCurrent = s.id === activeSource.id;
+            const isCurrent = s.id === displaySource.id;
             return (
               <span
                 key={s.id}
@@ -244,7 +251,7 @@ export default function Dashboard() {
             );
           })}
           <button
-            onClick={() => notifications.toggle(activeSource.id, activeSource.name)}
+            onClick={() => notifications.toggle(displaySource.id, displaySource.name)}
             className={`source-toggle-btn ${currentAlertSettings.enabled ? 'active' : ''}`}
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: currentAlertSettings.enabled ? 'var(--accent-orange)' : undefined, color: currentAlertSettings.enabled ? 'var(--bg-primary)' : 'white', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
           >
@@ -269,7 +276,7 @@ export default function Dashboard() {
       {weatherData && (
         <>
           <Suspense fallback={<SkeletonMap />}>
-            <WindMapWidget allWindData={windData} activeSourceId={activeSource.id} sources={SOURCES} onSourceSelect={setActiveSource} />
+            <WindMapWidget allWindData={windData} activeSourceId={displaySource.id} sources={SOURCES} onSourceSelect={setActiveSource} />
           </Suspense>
 
           <HistoricalChart data={historyData} />
