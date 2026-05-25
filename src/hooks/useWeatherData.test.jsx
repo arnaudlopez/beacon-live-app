@@ -79,9 +79,9 @@ function jsonResponse(body) {
   };
 }
 
-async function importHook() {
+async function importHook(backendUrl = 'http://backend.local') {
   vi.resetModules();
-  vi.stubEnv('VITE_WEATHER_BACKEND_URL', 'http://backend.local');
+  vi.stubEnv('VITE_WEATHER_BACKEND_URL', backendUrl);
   return import('./useWeatherData.js');
 }
 
@@ -191,6 +191,20 @@ describe('useWeatherData backend realtime mode', () => {
 
     await waitForAssertion(() => expect(result.current.windData.porticcio.live.windSpeed).toBe(12));
     expect(globalThis.fetch).toHaveBeenCalledTimes(2);
+
+    unmount();
+  });
+
+  it('does not duplicate the /api prefix when the backend URL is already /api', async () => {
+    globalThis.fetch = vi.fn().mockResolvedValue(jsonResponse(snapshot(10)));
+    const { useWeatherData } = await importHook('/api');
+
+    const { result, unmount } = renderWeatherHook(useWeatherData);
+
+    await waitForAssertion(() => expect(result.current.isLoading).toBe(false));
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/weather', expect.any(Object));
+    expect(MockEventSource.instances[0].url).toBe('/api/events');
 
     unmount();
   });

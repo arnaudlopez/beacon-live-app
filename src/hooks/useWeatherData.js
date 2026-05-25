@@ -66,6 +66,12 @@ function normalizeBackendUrl(url) {
   return url ? url.replace(/\/$/, '') : '';
 }
 
+function normalizeBackendApiUrl(url) {
+  const backendUrl = normalizeBackendUrl(url);
+  if (!backendUrl) return '';
+  return backendUrl.endsWith('/api') ? backendUrl : `${backendUrl}/api`;
+}
+
 export function useWeatherData() {
   const [windData, setWindData] = useState({});
   const [surfData, setSurfData] = useState({});
@@ -144,14 +150,14 @@ export function useWeatherData() {
   // Initial fetch + setup Realtime
   useEffect(() => {
     let cancelled = false;
-    const backendUrl = normalizeBackendUrl(BACKEND_URL);
+    const backendUrl = normalizeBackendApiUrl(BACKEND_URL);
 
     if (backendUrl) {
       let eventSource = null;
 
       const fetchBackendSnapshot = async () => {
         try {
-          const res = await fetch(`${backendUrl}/api/weather`, {
+          const res = await fetch(`${backendUrl}/weather`, {
             headers: {
               Accept: 'application/json',
             },
@@ -182,7 +188,7 @@ export function useWeatherData() {
       const openEventSource = () => {
         if (typeof EventSource === 'undefined') return;
 
-        eventSource = new EventSource(`${backendUrl}/api/events`);
+        eventSource = new EventSource(`${backendUrl}/events`);
         eventSource.addEventListener('weather:snapshot', (event) => handleSsePayload(event));
         eventSource.addEventListener('weather:update', (event) => handleSsePayload(event, true));
         eventSource.addEventListener('error', () => {
