@@ -1,0 +1,453 @@
+version: 2
+goal:
+  slug: "beacon-live-api-http-sse-slice-notes"
+  title: "Beacon Live API HTTP/SSE Slice - Notes"
+  status: active
+  created_at: "2026-05-25"
+  updated_at: "2026-05-25"
+  kind: specific
+  original_request: "# Beacon Live API HTTP/SSE Slice - Notes\n\n## Intent\n\nContinue the Beacon Live realtime Docker golden state by implementing the next smallest useful backend slice: a local HTTP/SSE server around the already-tested weather runtime core.\n\nThis slice should prove the backend can expose:\n\n- `GET /api/weather` for full snapshot recovery;\n- `GET /api/events` for Server-Sent Events updates;\n- `GET /api/health` for basic runtime diagnostics.\n\nAs the owner of Beacon Live, I want the future Docker backend to push fresh source updates to the dashboard through a real SSE endpoint, so the frontend can later move away from Supabase Realtime while keeping the current dashboard data shape.\n\n- Do not use real Meteo-France, WindsUp, Wunderground, Pioupiou, CANDHIS, or eSurfmar endpoints.\n- Do not add API credentials or secrets.\n- Do not implement SQLite persistence yet.\n- Do not change frontend hooks or dashboard components.\n- Do not change Docker, Nginx, or deployment files in this slice.\n- Do not delete Supabase code or dependencies.\n- Do not fix unrelated global lint failures unless a separate task explicitly authorizes it.\n\n## Non-Goals\n\n- TODO: Name what this goal must not change.\n\n## Proposed Oracle\n\nHTTP/SSE tests prove a local Beacon API server exposes /api/weather, /api/events, and /api/health, emits weather:update when the runtime observes a fresh source value, and preserves the dashboard payload shape without external services.\n\n## Suggested Mode\n\nimplementation\n\n## Acceptance Hints\n\n- A test starts the API server with fake source adapters and a fake clock.\n- `GET /api/weather` returns JSON with `ts`, `windData`, `surfData`, `waterData`, and `sourceHealth`.\n- `GET /api/health` returns JSON with service status and per-source health.\n- `GET /api/events` returns `text/event-stream`.\n- After the fake source changes and the runtime polls, the SSE stream emits a `weather:update` event.\n- The emitted event includes the mapped frontend source id, for example `windData.porticcio` for `windsup_porticcio`.\n- No test performs live external network calls.\n\n## Risks And Open Questions\n\n- TODO: List ambiguity, missing credentials, operational risks, or decisions needed before implementation.\n\n## Constraints\n\n- Keep implementation dependency-light; prefer Node built-in HTTP primitives unless there is a strong reason to add a framework.\n- Keep the API server separable from Docker and frontend migration.\n- Preserve the existing runtime tests.\n- Do not require real timers for the freshness check.\n- Do not broaden scope beyond the server adapter around the runtime.\n\n## Ready Mode Command\n\n```bash\nnpm run ready -- --from ./docs/goals/beacon-live-api-http-sse-slice/brief.md --mode implementation --oracle \"HTTP/SSE tests prove a local Beacon API server exposes /api/weather, /api/events, and /api/health, emits weather:update when the runtime observes a fresh source value, and preserves the dashboard payload shape without external services.\" --out docs/goals/beacon-live-api-http-sse-slice-notes\n```\n\n## Source Notes\n\nCompiled from: /Users/arnaud/Documents/beacon-live-app/docs/goals/beacon-live-api-http-sse-slice/notes.md\n\n> # Beacon Live API HTTP/SSE Slice - Notes\n> \n> ## Intent\n> \n> Continue the Beacon Live realtime Docker golden state by implementing the next smallest useful backend slice: a local HTTP/SSE server around the already-tested weather runtime core.\n> \n> This slice should prove the backend can expose:\n> \n> - `GET /api/weather` for full snapshot recovery;\n> - `GET /api/events` for Server-Sent Events updates;\n> - `GET /api/health` for basic runtime diagnostics.\n> \n> ## User Goal\n> \n> As the owner of Beacon Live, I want the future Docker backend to push fresh source updates to the dashboard through a real SSE endpoint, so the frontend can later move away from Supabase Realtime while keeping the current dashboard data shape.\n> \n> ## Current State\n> \n> - `docs/goals/beacon-live-realtime-docker-golden-state/golden-state.md` defines the architecture.\n> - `server/realtime/weatherRuntime.js` implements the pure runtime core.\n> - `server/realtime/weatherRuntime.test.js` covers:\n>   - changed payload broadcast;\n>   - unchanged payload suppression;\n>   - one-source failure isolation;\n>   - last-good snapshot preservation;\n>   - <=30s latency model.\n> \n> ## Scope\n> \n> Implement a server layer that wraps the runtime with deterministic local/fake sources only.\n> \n> The slice may add code under `server/realtime/**`.\n> \n> The slice may add tests under `server/realtime/**`.\n> \n> ## Non-Goals\n> \n> - Do not use real Meteo-France, WindsUp, Wunderground, Pioupiou, CANDHIS, or eSurfmar endpoints.\n> - Do not add API credentials or secrets.\n> - Do not implement SQLite persistence yet.\n> - Do not change frontend hooks or dashboard components.\n> - Do not change Docker, Nginx, or deployment files in this slice.\n> - Do not delete Supabase code or dependencies.\n> - Do not fix unrelated global lint failures unless a separate task explicitly authorizes it.\n> \n> ## Proposed Oracle\n> \n> HTTP/SSE tests prove a local Beacon API server exposes `/api/weather`, `/api/events`, and `/api/health`, emits a `weather:update` SSE event when the runtime observes a fresh source value, and preserves the existing dashboard payload shape without external services.\n> \n> ## Acceptance\n> \n> - A test starts the API server with fake source adapters and a fake clock.\n> - `GET /api/weather` returns JSON with `ts`, `windData`, `surfData`, `waterData`, and `sourceHealth`.\n> - `GET /api/health` returns JSON with service status and per-source health.\n> - `GET /api/events` returns `text/event-stream`.\n> - After the fake source changes and the runtime polls, the SSE stream emits a `weather:update` event.\n> - The emitted event includes the mapped frontend source id, for example `windData.porticcio` for `windsup_porticcio`.\n> - No test performs live external network calls.\n> \n> ## Constraints\n> \n> - Keep implementation dependency-light; prefer Node built-in HTTP primitives unless there is a strong reason to add a framework.\n> - Keep the API server separable from Docker and frontend migration.\n> - Preserve the existing runtime tests.\n> - Do not require real timers for the freshness check.\n> - Do not broaden scope beyond the server adapter around the runtime.\n> \n> ## Suggested First Test\n> \n> `server/realtime/weatherApiServer.test.js`\n> \n> Expected behavior:\n> \n> 1. Create a fake clock and fake source.\n> 2. Create runtime with `createWeatherRuntime`.\n> 3. Create API server with `createWeatherApiServer`.\n> 4. Assert `/api/weather` snapshot shape.\n> 5. Open `/api/events`.\n> 6. Trigger `runtime.pollDueSources()`.\n> 7. Assert the SSE stream receives `event: weather:update`.\n> \n> ## Verification\n> \n> - `npm test -- server/realtime/weatherApiServer.test.js`\n> - `npm test -- server/realtime/weatherRuntime.test.js`\n> - `npm test`\n> - `npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js`\n> - `npm run build`\n> - `git diff --check`"
+  interpreted_outcome: "Run the prepared LLM-first workflow for Beacon Live API HTTP/SSE Slice - Notes."
+  input_shape: specific
+  audience: "Product owner and target users"
+  authority: requested
+  proof_type:
+    - test
+    - artifact
+    - review
+  completion_proof: "Final audit maps red tests, green verification, implementation receipts, and shipping proof back to the oracle."
+  goal_oracle: "HTTP/SSE tests prove a local Beacon API server exposes /api/weather, /api/events, and /api/health, emits weather:update when the runtime observes a fresh source value, and preserves the dashboard payload shape without external services."
+  oracle:
+    signal: "HTTP/SSE tests prove a local Beacon API server exposes /api/weather, /api/events, and /api/health, emits weather:update when the runtime observes a fresh source value, and preserves the dashboard payload shape without external services."
+    final_proof: "T999 states full_outcome_complete: true and cites passing acceptance evidence, verification commands, design review, and T998 shipping evidence."
+  likely_misfire: "Starting implementation from a plausible plan before converting the owner outcome into acceptance tests and observable proof."
+  constraints:
+    - "Acceptance tests or equivalent observable proof must be written before production implementation."
+    - "Implementation must stay inside Judge-approved allowed_files."
+    - "Unrelated dirty worktree changes must remain untouched."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  allow_read_only_goal_without_shipping: true
+  require_quality_checker: true
+  require_tdd_worker_flow: true
+  require_github_ship_task: true
+  require_impact_assessment: true
+  goal_pressure_requires_oracle: true
+
+goal_policy:
+  mode: implementation
+  requires_tdd: true
+  requires_impact_assessment: true
+  requires_shipping: true
+  requires_visual_verification: false
+  requires_migration_proof: false
+  requires_infra_proof: false
+  requires_dependency_review: false
+  requires_dirty_worktree_guard: true
+  requires_refactor_proof: false
+  rationale: "Ready Mode is for app-code or product-behavior work after an LLM-first spec conversation has converged."
+
+workflow_safeguards:
+  requires_design_concept: true
+  requires_ubiquitous_language: true
+  requires_feedback_policy: true
+  requires_test_strategy: true
+  requires_module_map: true
+  requires_interface_contract: true
+  requires_architecture_review: true
+  requires_design_delta: true
+  require_t998_shipping: true
+  require_t999_final_audit: true
+  protect_unrelated_dirty_worktree: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+active_task: null
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    objective: "Turn the mature request into a concrete acceptance contract before any implementation work."
+    inputs:
+      - "goal.md"
+      - "acceptance-contract.md"
+      - "Current repository source, tests, scripts, docs, and dirty worktree status"
+    constraints:
+      - "Read-only."
+      - "Do not edit product files."
+      - "Do not start implementation."
+      - "Prefer observable owner outcomes over internal task completion."
+    expected_output:
+      - "design_concept: shared understanding, non-goals, and decision dependencies"
+      - "ubiquitous_language: domain terms, overloaded words, and forbidden synonyms"
+      - "module_map: relevant deep modules, boundaries, and shallow-module risks"
+      - "interface_contract: public behavior and boundaries that tests should target"
+      - "test_strategy: acceptance tests, unit/integration boundaries, mocks, browser or visual checks if relevant"
+      - "feedback_policy: targeted test cadence, typecheck, browser checks, and full-suite timing"
+      - "acceptance_contract_updates: exact end-state evidence and failure modes"
+      - "dirty_worktree_risk_map: unrelated files that must stay untouched"
+      - "impact_assessment covering db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs"
+    receipt:
+      result: done
+      summary: "Read-only Scout mapping completed for the HTTP/SSE slice. The goal is to wrap the existing weather runtime in local HTTP endpoints using fake sources only, without frontend, Docker, SQLite, Supabase, secrets, or external API changes."
+      design_concept: "Implement a dependency-light server adapter around createWeatherRuntime. The server exposes snapshot recovery via GET /api/weather, server-push updates via GET /api/events, and diagnostics via GET /api/health. Tests should use fake sources and fake clocks to trigger deterministic weather:update events."
+      ubiquitous_language:
+        api server: "thin HTTP adapter around the runtime, not the collector implementation itself"
+        snapshot endpoint: "GET /api/weather returning current dashboard-shaped payload"
+        events endpoint: "GET /api/events returning an SSE stream"
+        health endpoint: "GET /api/health returning operational state"
+        fake source: "deterministic test adapter with no external network"
+        SSE frame: "text/event-stream record with event and data fields"
+      module_map:
+        existing_runtime: "server/realtime/weatherRuntime.js is the core to wrap."
+        existing_runtime_tests: "server/realtime/weatherRuntime.test.js must remain green."
+        new_server_module: "server/realtime/weatherApiServer.js should own HTTP routing, JSON responses, SSE headers, subscriber lifecycle, and basic 404 handling."
+        new_server_tests: "server/realtime/weatherApiServer.test.js should start a local server with fake runtime/source and assert /api/weather, /api/health, and /api/events."
+      interface_contract:
+        GET /api/weather: "200 application/json with ts, windData, surfData, waterData, sourceHealth."
+        GET /api/health: "200 application/json with status ok, sourceHealth, and sseClients count."
+        GET /api/events: "200 text/event-stream; emits weather:update when runtime subscriber receives update; sends heartbeat/comment optional but not required for first slice."
+        unknown route: "404 JSON or text response; no side effects."
+        external services: "not used in this slice."
+      test_strategy:
+        red: "Write failing tests importing createWeatherApiServer before implementation."
+        green: "Implement minimal Node HTTP server adapter to pass tests."
+        integration: "Use local loopback server and fetch/ReadableStream; fake sources only."
+        regression: "Keep weatherRuntime tests and full npm test green."
+      feedback_policy: "Run targeted HTTP/SSE test first, then runtime test, then full npm test, targeted eslint on server files, build, and git diff --check. Global npm run lint is known to fail out of scope unless separately fixed."
+      dirty_worktree_risk_map: "Untracked .claude remains unrelated. Existing docs/goals/beacon-live-realtime-docker-golden-state and server/realtime runtime files are prior goal artifacts. This slice should only add/edit docs/goals/beacon-live-api-http-sse-slice/** and server/realtime/weatherApiServer* plus server runtime tests if needed."
+      impact_assessment:
+        db_schema_migrations: none
+        data_backfill: none
+        env_secrets: none
+        auth_permissions: none
+        api_contract: "adds local draft contracts for /api/weather, /api/events, /api/health under server module only; not wired to production deployment"
+        ui_routes: none
+        background_jobs: "none beyond explicit test-driven runtime polling calls"
+        external_services: none
+        deploy_rollback: "none; no deployment wiring in this slice"
+        observability: "basic health response with sourceHealth and sseClients"
+        docs: "new DevLoop board docs for HTTP/SSE slice"
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Approve the acceptance contract and choose the largest safe red-test package."
+    inputs:
+      - "T001 receipt"
+      - "Updated acceptance-contract.md if T001 changed it"
+    constraints:
+      - "Do not implement."
+      - "Reject implementation work before tests can express the oracle."
+      - "Reject vague acceptance criteria that cannot be verified."
+      - "Choose a useful vertical slice, not tiny helper-only work."
+    expected_output:
+      - "Decision: approved | needs_more_evidence | blocked"
+      - "Approved design_concept"
+      - "Approved ubiquitous_language"
+      - "feedback_policy"
+      - "test_strategy"
+      - "module_map"
+      - "interface_contract"
+      - "architecture_review"
+      - "Exact Worker objective for red tests"
+      - "allowed_files for T003"
+      - "verify commands for T003"
+      - "stop_if conditions for T003"
+      - "impact_assessment_ref"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Approved the HTTP/SSE server adapter slice. The next worker should write red tests for /api/weather, /api/health, and /api/events using fake sources only."
+      architecture_review: "The slice is well bounded: it wraps the existing runtime in a minimal local HTTP adapter, proves the API contracts, and avoids Docker, SQLite, frontend migration, external APIs, credentials, and Supabase changes. Node built-in HTTP is sufficient for the first adapter and keeps dependency risk low."
+      task_updates:
+        T003:
+          allowed_files:
+            - server/realtime/weatherApiServer.test.js
+          verify:
+            - "npm test -- server/realtime/weatherApiServer.test.js"
+          stop_if:
+            - "Need implementation changes before red evidence."
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T004:
+          allowed_files:
+            - server/realtime/weatherApiServer.js
+            - server/realtime/weatherApiServer.test.js
+            - server/realtime/weatherRuntime.js
+            - server/realtime/weatherRuntime.test.js
+          verify:
+            - "npm test -- server/realtime/weatherApiServer.test.js"
+            - "npm test -- server/realtime/weatherRuntime.test.js"
+            - "npm test"
+            - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js"
+            - "npm run build"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "No prior red_test evidence exists."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+            - "Need frontend migration, Docker wiring, SQLite, or real upstream credentials before the server adapter is green."
+            - "Verification fails twice without a clear bounded fix."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T005:
+          allowed_files:
+            - server/realtime/weatherApiServer.js
+            - server/realtime/weatherApiServer.test.js
+            - server/realtime/weatherRuntime.js
+            - server/realtime/weatherRuntime.test.js
+            - "docs/goals/beacon-live-api-http-sse-slice/**"
+          verify:
+            - "npm test -- server/realtime/weatherApiServer.test.js"
+            - "npm test -- server/realtime/weatherRuntime.test.js"
+            - "npm test"
+            - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js"
+            - "npm run build"
+            - "git diff --check"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+            - "Verification fails twice without understood cause."
+          impact_assessment_ref: T001.receipt.impact_assessment
+  - id: T003
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write the failing acceptance tests selected by Judge, without production implementation."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T002 approved acceptance contract"
+      - "T002 allowed_files and verify commands"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherApiServer.test.js
+    verify:
+      - "npm test -- server/realtime/weatherApiServer.test.js"
+    stop_if:
+      - "Need implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+    receipt:
+      result: done
+      summary: "Added red HTTP/SSE contract tests for the future weather API server. Tests cover /api/weather snapshot shape, /api/health diagnostics, /api/events SSE weather:update delivery, mapped frontend source ids, and 404 behavior without external services."
+      changed_files:
+        - server/realtime/weatherApiServer.test.js
+      red_evidence:
+        command: "npm test -- server/realtime/weatherApiServer.test.js"
+        result: "failed as expected"
+        failure: "Failed to resolve import ./weatherApiServer.js from server/realtime/weatherApiServer.test.js because the implementation module does not exist yet."
+      verify:
+        - "npm test -- server/realtime/weatherApiServer.test.js"
+  - id: T004
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement the largest safe useful slice that makes the approved red tests pass."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T003 red test receipt"
+      - "T002 implementation boundaries"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherApiServer.js
+      - server/realtime/weatherApiServer.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+    verify:
+      - "npm test -- server/realtime/weatherApiServer.test.js"
+      - "npm test -- server/realtime/weatherRuntime.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js"
+      - "npm run build"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "No prior red_test evidence exists."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need frontend migration, Docker wiring, SQLite, or real upstream credentials before the server adapter is green."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented the approved HTTP/SSE API server adapter around the weather runtime. It exposes GET /api/weather, GET /api/health, GET /api/events as text/event-stream, and 404 handling for unknown routes without external services or credentials."
+      changed_files:
+        - server/realtime/weatherApiServer.js
+        - server/realtime/weatherApiServer.test.js
+      green_test:
+        command: "npm test -- server/realtime/weatherApiServer.test.js"
+        result: pass
+      verify:
+        - "npm test -- server/realtime/weatherApiServer.test.js: pass, 2 tests"
+        - "npm test -- server/realtime/weatherRuntime.test.js: pass, 3 tests"
+        - "npm test: pass, 10 files / 143 tests"
+        - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js: pass"
+        - "npm run build: pass with existing chunk-size warning"
+        - "git diff --check: pass"
+  - id: T005
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run the full verification package, including browser or visual checks when the acceptance contract requires them."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T004 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherApiServer.js
+      - server/realtime/weatherApiServer.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+      - "docs/goals/beacon-live-api-http-sse-slice/**"
+    verify:
+      - "npm test -- server/realtime/weatherApiServer.test.js"
+      - "npm test -- server/realtime/weatherRuntime.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Verification package for the HTTP/SSE API server slice completed successfully. The API server tests, runtime tests, full suite, targeted ESLint, build, and diff whitespace check all pass within the approved boundaries."
+      changed_files:
+        []
+      green_test:
+        command: "npm test -- server/realtime/weatherApiServer.test.js"
+        result: pass
+      verify:
+        - "npm test -- server/realtime/weatherApiServer.test.js: pass, 2 tests"
+        - "npm test -- server/realtime/weatherRuntime.test.js: pass, 3 tests"
+        - "npm test: pass, 10 files / 143 tests"
+        - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js: pass"
+        - "npm run build: pass with existing >500 kB chunk warning"
+        - "git diff --check: pass"
+  - id: T006
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review architecture, spec fidelity, and test evidence before shipping."
+    inputs:
+      - "T001 through T005 receipts"
+      - "Current diff"
+      - "Last verification output"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if the implementation only satisfies internal tasks but not the original oracle."
+      - "Reject hidden design drift, shallow-module sprawl, or missing acceptance evidence."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "The HTTP/SSE adapter slice is approved. It satisfies the local oracle for /api/weather, /api/health, and /api/events using fake sources only, without external services, secrets, Docker, SQLite, Supabase, or frontend changes."
+      architecture_review: "The implementation is intentionally thin and dependency-light. createWeatherApiServer wraps the runtime with Node HTTP, emits JSON snapshots and health responses, and streams runtime events as SSE frames. It preserves separation from the collector, persistence, deployment, and frontend layers. Subscriber cleanup is handled on request close. This is a valid bridge toward the Docker backend goal."
+      design_delta: "Added a real HTTP/SSE adapter around the previously implemented pure runtime. No changes to frontend, Docker, SQLite, Supabase, or source parsers."
+      oracle_coverage: "Covered for this slice: /api/weather snapshot shape, /api/health sourceHealth and sseClients, /api/events text/event-stream, weather:update frame delivery after runtime observes changed fake source data, mapped windData.porticcio payload, <=30s latency metadata, and 404 unknown route behavior. Not covered yet: actual Docker process lifecycle, SQLite persistence, real source adapters, proxy buffering behavior, frontend EventSource hook, and deployment."
+      remaining_risks: "SSE heartbeat is not implemented yet. /api/events does not send an initial snapshot frame yet. The server is not wired to a long-running scheduler or Docker entrypoint. Global npm run lint remains known-broken outside this slice due to pre-existing files. Repo is behind origin/master and .claude is unrelated/untracked."
+      another_worker_slice_needed: true
+      task_updates:
+  - id: T998
+    type: pm
+    assignee: PM
+    status: queued
+    objective: "Commit all goal-related changes and push the current branch once verification is green."
+    inputs:
+      - "Approved implementation and verification receipts"
+      - "Current git status"
+    constraints:
+      - "Do not include unrelated dirty files."
+      - "If the workspace is not a git repository, record shipping_blocker: no_git_repository."
+      - "If no GitHub remote exists, record shipping_blocker: no_github_remote."
+    expected_output:
+      - "Or shipping_blocker: no_git_repository | no_github_remote"
+      - "Unrelated dirty files left untouched"
+      - "Committed files"
+      - "Push result"
+      - "Remote branch"
+      - "Commit SHA"
+      - "commit_sha"
+      - "remote_branch or push string"
+      - "push_result"
+      - "committed_files"
+      - "unrelated_dirty_files_left_untouched"
+    receipt: null
+
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit whether the full original outcome is complete."
+    inputs:
+      - "design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, and design_delta evidence"
+      - "All done task receipts"
+      - "Last verification"
+      - "Current dirty diff"
+      - "Quality checker final output"
+      - "Completed impact_assessment receipt"
+      - "T998 shipping proof when shipping is required"
+    constraints:
+      - "Reject completion if design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, or design_delta evidence is missing when workflow_safeguards requires it."
+      - "Do not implement."
+      - "Reject completion if required Worker work is still queued or active."
+      - "Reject completion unless impact_assessment covers db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs when impact assessment is required."
+      - "For read-only audit goals with no Worker tasks and no changed_files, accept audit_scope/audit_findings/review/decision evidence instead of TDD, impact_assessment, T998, commit, and push."
+      - "For verification goals, reject completion unless safe test/browser command evidence exists and no changed_files are reported."
+      - "Reject completion unless T998 has a commit SHA and successful push result, or an explicit shipping_blocker for no_git_repository/no_github_remote, when shipping is required."
+    expected_output:
+      - "design_delta"
+      - "workflow_safeguards result"
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt: null

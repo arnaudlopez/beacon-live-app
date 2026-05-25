@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   beacon-live:
     # --------------------------------------------------------
@@ -7,11 +5,15 @@ services:
     # --------------------------------------------------------
     build:
       context: .
+      target: frontend
       args:
         - VITE_SUPABASE_URL=${VITE_SUPABASE_URL}
         - VITE_SUPABASE_ANON_KEY=${VITE_SUPABASE_ANON_KEY}
+        - VITE_WEATHER_BACKEND_URL=${VITE_WEATHER_BACKEND_URL:-/api}
     container_name: beacon-live
     restart: unless-stopped
+    depends_on:
+      - weather-api
 
     # --------------------------------------------------------
     # RÉSEAU
@@ -51,3 +53,36 @@ services:
         reservations:
           cpus: '0.10'
           memory: 64M
+
+  weather-api:
+    build:
+      context: .
+      target: weather-api
+    container_name: beacon-live-weather-api
+    restart: unless-stopped
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8787
+      - WEATHER_STORE_PATH=/data/weather-state.json
+      - WEATHER_POLL_MS=${WEATHER_POLL_MS:-20000}
+      - WEATHER_HEARTBEAT_MS=${WEATHER_HEARTBEAT_MS:-15000}
+    volumes:
+      - weather-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+volumes:
+  weather-data:
