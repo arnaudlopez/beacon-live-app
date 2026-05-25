@@ -22,6 +22,7 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const EDGE_FUNCTION_URL = SUPABASE_URL + '/functions/v1/weather-cache';
+const BACKEND_URL = import.meta.env.VITE_WEATHER_BACKEND_URL;
 
 // Fallback polling interval (only used if Realtime is down)
 const FALLBACK_POLL_MS = 60_000;
@@ -52,8 +53,18 @@ const MARINE_SOURCES = ['candhis_revellata', 'candhis_bonifacio', 'esurfmar_ajac
 // Fix 5: deduplicate esurfmar_ajaccio which appears in both lists
 const ALL_EDGE_SOURCES = [...new Set([...WIND_EDGE_KEYS, ...MARINE_SOURCES])];
 
-// Create Supabase client (singleton)
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+let supabaseClient = null;
+
+function getSupabaseClient() {
+  if (!supabaseClient) {
+    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+  return supabaseClient;
+}
+
+function normalizeBackendUrl(url) {
+  return url ? url.replace(/\/$/, '') : '';
+}
 
 export function useWeatherData() {
   const [windData, setWindData] = useState({});
@@ -65,6 +76,23 @@ export function useWeatherData() {
   const [isRealtime, setIsRealtime] = useState(false);
 
   const channelRef = useRef(null);
+  const realtimeResetRef = useRef(null);
+
+  const markRealtime = useCallback(() => {
+    setIsRealtime(true);
+    if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
+    realtimeResetRef.current = setTimeout(() => setIsRealtime(false), 3000);
+  }, []);
+
+  const applyBackendSnapshot = useCallback((snapshot, realtime = false) => {
+    setWindData(snapshot.windData || {});
+    setSurfData(snapshot.surfData || {});
+    setWaterData(snapshot.waterData || null);
+    setLastUpdated(snapshot.ts ? new Date(snapshot.ts) : new Date());
+    setError('');
+    setIsLoading(false);
+    if (realtime) markRealtime();
+  }, [markRealtime]);
 
   // Edge Function fetch (full payload with history)
   const fetchFromEdge = useCallback(async (sources) => {
@@ -116,6 +144,66 @@ export function useWeatherData() {
   // Initial fetch + setup Realtime
   useEffect(() => {
     let cancelled = false;
+    const backendUrl = normalizeBackendUrl(BACKEND_URL);
+
+    if (backendUrl) {
+      let eventSource = null;
+
+      const fetchBackendSnapshot = async () => {
+        try {
+          const res = await fetch(`${backendUrl}/api/weather`, {
+            headers: {
+              Accept: 'application/json',
+            },
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const snapshot = await res.json();
+          if (!cancelled) applyBackendSnapshot(snapshot);
+          return snapshot;
+        } catch (err) {
+          if (!cancelled) {
+            setError(`Connexion backend échouée: ${err.message}`);
+            setIsLoading(false);
+          }
+          return null;
+        }
+      };
+
+      const handleSsePayload = (event, realtime = false) => {
+        try {
+          const payload = JSON.parse(event.data);
+          const snapshot = payload.data || payload;
+          if (!cancelled) applyBackendSnapshot(snapshot, realtime);
+        } catch (err) {
+          if (!cancelled) setError(`Flux temps réel invalide: ${err.message}`);
+        }
+      };
+
+      const openEventSource = () => {
+        if (typeof EventSource === 'undefined') return;
+
+        eventSource = new EventSource(`${backendUrl}/api/events`);
+        eventSource.addEventListener('weather:snapshot', (event) => handleSsePayload(event));
+        eventSource.addEventListener('weather:update', (event) => handleSsePayload(event, true));
+        eventSource.addEventListener('error', () => {
+          eventSource?.close();
+          fetchBackendSnapshot();
+        });
+      };
+
+      fetchBackendSnapshot().then(() => {
+        if (!cancelled) openEventSource();
+      });
+
+      const backendInterval = setInterval(fetchBackendSnapshot, FALLBACK_POLL_MS);
+
+      return () => {
+        cancelled = true;
+        clearInterval(backendInterval);
+        if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
+        eventSource?.close();
+      };
+    }
 
     // --- 1. Initial full fetch (Fix 5+6: single request, no duplicate esurfmar_ajaccio) ---
     const initialFetch = async () => {
@@ -133,6 +221,7 @@ export function useWeatherData() {
     initialFetch();
 
     // --- 2. Subscribe to Realtime changes on weather_cache ---
+    const supabase = getSupabaseClient();
     const channel = supabase
       .channel('weather-realtime')
       .on(
@@ -152,9 +241,7 @@ export function useWeatherData() {
             const [appId] = windEntry;
             setWindData(prev => ({ ...prev, [appId]: data }));
             setLastUpdated(new Date());
-            setIsRealtime(true);
-            // Reset the realtime indicator after 3s
-            setTimeout(() => setIsRealtime(false), 3000);
+            markRealtime();
             return;
           }
 
@@ -196,11 +283,12 @@ export function useWeatherData() {
       cancelled = true;
       clearInterval(fallbackInterval);
       clearInterval(marineInterval);
+      if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
       if (channelRef.current) {
-        supabase.removeChannel(channelRef.current);
+        getSupabaseClient().removeChannel(channelRef.current);
       }
     };
-  }, [fetchFromEdge, mapWindData, processMarine]);
+  }, [applyBackendSnapshot, fetchFromEdge, mapWindData, markRealtime, processMarine]);
 
   return { windData, surfData, waterData, isLoading, lastUpdated, error, isRealtime };
 }

@@ -1,0 +1,1329 @@
+version: 2
+goal:
+  slug: "beacon-live-docker-realtime-product-notes"
+  title: "Beacon Live Docker Realtime Product - Notes"
+  status: complete
+  created_at: "2026-05-25"
+  updated_at: "2026-05-25"
+  kind: specific
+  original_request: "# Beacon Live Docker Realtime Product - Notes\n\n## Intent\n\nTurn the Beacon Live Docker realtime architecture into a working product path.\n\nThe final product should run a local Docker-ready backend that owns live weather collection, exposes snapshot and SSE endpoints, and lets the React dashboard receive fresh updates without depending on Supabase Realtime for the live path.\n\nAs the owner of Beacon Live, I want the dashboard to display the freshest possible wind/surf data, ideally within 30 seconds of upstream publication for fast sources, while avoiding Supabase live limits.\n\n- Do not remove Supabase code immediately.\n- Do not delete existing dashboard components.\n- Do not expose API secrets to the browser.\n- Do not require live external API credentials for automated tests.\n- Do not redesign the UI.\n- Do not optimize unrelated lint failures unless they block product verification.\n- Do not promise faster updates than upstream sources actually publish.\n- Do not make Cloudflare the sub-minute collector.\n\n## Non-Goals\n\n- TODO: Name what this goal must not change.\n\n## Proposed Oracle\n\nBeacon Live runs with a Docker-ready local realtime backend that exposes /api/weather, /api/events, and /api/health, polls configured sources through adapters, persists local history, pushes fresh updates to the React dashboard over SSE, keeps Supabase as fallback only, and passes automated verification without external secrets.\n\n## Suggested Mode\n\nimplementation\n\n## Acceptance Hints\n\n- Backend can run locally as a long-running service with fake/demo adapters and no external secrets.\n- Backend exposes:\n- `GET /api/weather`;\n- `GET /api/events`;\n- `GET /api/health`.\n- SSE emits `weather:update` when the runtime observes fresh source data.\n- SSE includes heartbeat and an initial snapshot or equivalent recovery path.\n- Backend has a persistence layer for current snapshot, source observations, and source health using a local durable store.\n- Frontend hook can use the local backend via environment configuration.\n- Frontend opens SSE and merges `weather:update` events into the existing dashboard state shape.\n- Frontend falls back to existing Supabase hook or HTTP polling if the local backend/SSE is unavailable.\n- Docker Compose includes the backend service and routes/proxies `/api/*` appropriately for local production deployment.\n- Tests do not call real external weather services.\n- Verification includes targeted backend tests, frontend hook tests, full `npm test`, build, targeted lint or documented existing lint blockers, and at least one local smoke check.\n- Red/green tests for scheduler and SSE heartbeat/snapshot.\n- Red/green tests for persistence.\n- Red/green tests for frontend hook event merging/fallback.\n- Docker/backend smoke command returns healthy `/api/health`.\n- Build and test commands pass or blockers are explicitly documented.\n\n## Risks And Open Questions\n\n- TODO: List ambiguity, missing credentials, operational risks, or decisions needed before implementation.\n\n## Constraints\n\n- Use existing source ids from `src/config/sources.js`.\n- Preserve existing dashboard visual behavior.\n- Keep Supabase fallback until the new path is proven.\n- Keep all secrets server-side.\n- Prefer small modules under `server/realtime/**`.\n- Avoid adding fragile native dependencies unless necessary.\n- Any persistence choice must work in Docker without complex build tooling.\n\n## Ready Mode Command\n\n```bash\nnpm run ready -- --from ./docs/goals/beacon-live-docker-realtime-product/brief.md --mode implementation --oracle \"Beacon Live runs with a Docker-ready local realtime backend that exposes /api/weather, /api/events, and /api/health, polls configured sources through adapters, persists local history, pushes fresh updates to the React dashboard over SSE, keeps Supabase as fallback only, and passes automated verification without external secrets.\" --out docs/goals/beacon-live-docker-realtime-product-notes\n```\n\n## Source Notes\n\nCompiled from: /Users/arnaud/Documents/beacon-live-app/docs/goals/beacon-live-docker-realtime-product/notes.md\n\n> # Beacon Live Docker Realtime Product - Notes\n> \n> ## Intent\n> \n> Turn the Beacon Live Docker realtime architecture into a working product path.\n> \n> The final product should run a local Docker-ready backend that owns live weather collection, exposes snapshot and SSE endpoints, and lets the React dashboard receive fresh updates without depending on Supabase Realtime for the live path.\n> \n> ## User Goal\n> \n> As the owner of Beacon Live, I want the dashboard to display the freshest possible wind/surf data, ideally within 30 seconds of upstream publication for fast sources, while avoiding Supabase live limits.\n> \n> ## Current Foundation\n> \n> - `docs/goals/beacon-live-realtime-docker-golden-state/golden-state.md` defines the target architecture.\n> - `server/realtime/weatherRuntime.js` implements the core runtime.\n> - `server/realtime/weatherApiServer.js` exposes initial HTTP/SSE endpoints.\n> - Tests already prove:\n>   - changed payload broadcast;\n>   - unchanged payload suppression;\n>   - one-source failure isolation;\n>   - `/api/weather`;\n>   - `/api/health`;\n>   - `/api/events`.\n> \n> ## Non-Goals\n> \n> - Do not remove Supabase code immediately.\n> - Do not delete existing dashboard components.\n> - Do not expose API secrets to the browser.\n> - Do not require live external API credentials for automated tests.\n> - Do not redesign the UI.\n> - Do not optimize unrelated lint failures unless they block product verification.\n> - Do not promise faster updates than upstream sources actually publish.\n> - Do not make Cloudflare the sub-minute collector.\n> \n> ## Proposed Oracle\n> \n> Beacon Live runs with a Docker-ready local realtime backend that exposes `/api/weather`, `/api/events`, and `/api/health`, polls configured sources through adapters, persists local history, pushes fresh updates to the React dashboard over SSE, keeps Supabase as fallback only, and passes automated verification without external secrets.\n> \n> ## Acceptance\n> \n> - Backend can run locally as a long-running service with fake/demo adapters and no external secrets.\n> - Backend exposes:\n>   - `GET /api/weather`;\n>   - `GET /api/events`;\n>   - `GET /api/health`.\n> - SSE emits `weather:update` when the runtime observes fresh source data.\n> - SSE includes heartbeat and an initial snapshot or equivalent recovery path.\n> - Backend has a persistence layer for current snapshot, source observations, and source health using a local durable store.\n> - Frontend hook can use the local backend via environment configuration.\n> - Frontend opens SSE and merges `weather:update` events into the existing dashboard state shape.\n> - Frontend falls back to existing Supabase hook or HTTP polling if the local backend/SSE is unavailable.\n> - Docker Compose includes the backend service and routes/proxies `/api/*` appropriately for local production deployment.\n> - Tests do not call real external weather services.\n> - Verification includes targeted backend tests, frontend hook tests, full `npm test`, build, targeted lint or documented existing lint blockers, and at least one local smoke check.\n> \n> ## Constraints\n> \n> - Use existing source ids from `src/config/sources.js`.\n> - Preserve existing dashboard visual behavior.\n> - Keep Supabase fallback until the new path is proven.\n> - Keep all secrets server-side.\n> - Prefer small modules under `server/realtime/**`.\n> - Avoid adding fragile native dependencies unless necessary.\n> - Any persistence choice must work in Docker without complex build tooling.\n> \n> ## Suggested Implementation Order\n> \n> 1. Add scheduler/heartbeat/snapshot SSE behavior around existing runtime.\n> 2. Add durable persistence with a Docker-friendly store.\n> 3. Add demo/fake source adapters for local no-secret operation.\n> 4. Add server entrypoint for long-running backend.\n> 5. Add frontend hook for backend HTTP/SSE with Supabase fallback.\n> 6. Add Docker Compose/Nginx proxy wiring.\n> 7. Add docs and smoke verification.\n> \n> ## Acceptance Evidence\n> \n> - Red/green tests for scheduler and SSE heartbeat/snapshot.\n> - Red/green tests for persistence.\n> - Red/green tests for frontend hook event merging/fallback.\n> - Docker/backend smoke command returns healthy `/api/health`.\n> - Build and test commands pass or blockers are explicitly documented."
+  interpreted_outcome: "Run the prepared LLM-first workflow for Beacon Live Docker Realtime Product - Notes."
+  input_shape: specific
+  audience: "Product owner and target users"
+  authority: requested
+  proof_type:
+    - test
+    - artifact
+    - review
+  completion_proof: "Final audit maps red tests, green verification, implementation receipts, and shipping proof back to the oracle."
+  goal_oracle: "Beacon Live runs with a Docker-ready local realtime backend that exposes /api/weather, /api/events, and /api/health, polls configured sources through adapters, persists local history, pushes fresh updates to the React dashboard over SSE, keeps Supabase as fallback only, and passes automated verification without external secrets."
+  oracle:
+    signal: "Beacon Live runs with a Docker-ready local realtime backend that exposes /api/weather, /api/events, and /api/health, polls configured sources through adapters, persists local history, pushes fresh updates to the React dashboard over SSE, keeps Supabase as fallback only, and passes automated verification without external secrets."
+    final_proof: "T999 states full_outcome_complete: true and cites passing acceptance evidence, verification commands, design review, and T998 shipping evidence."
+  likely_misfire: "Starting implementation from a plausible plan before converting the owner outcome into acceptance tests and observable proof."
+  constraints:
+    - "Acceptance tests or equivalent observable proof must be written before production implementation."
+    - "Implementation must stay inside Judge-approved allowed_files."
+    - "Unrelated dirty worktree changes must remain untouched."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  allow_read_only_goal_without_shipping: true
+  require_quality_checker: true
+  require_tdd_worker_flow: true
+  require_github_ship_task: true
+  require_impact_assessment: true
+  goal_pressure_requires_oracle: true
+
+goal_policy:
+  mode: implementation
+  requires_tdd: true
+  requires_impact_assessment: true
+  requires_shipping: true
+  requires_visual_verification: false
+  requires_migration_proof: false
+  requires_infra_proof: false
+  requires_dependency_review: false
+  requires_dirty_worktree_guard: true
+  requires_refactor_proof: false
+  rationale: "Ready Mode is for app-code or product-behavior work after an LLM-first spec conversation has converged."
+
+workflow_safeguards:
+  requires_design_concept: true
+  requires_ubiquitous_language: true
+  requires_feedback_policy: true
+  requires_test_strategy: true
+  requires_module_map: true
+  requires_interface_contract: true
+  requires_architecture_review: true
+  requires_design_delta: true
+  require_t998_shipping: true
+  require_t999_final_audit: true
+  protect_unrelated_dirty_worktree: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+active_task: null
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    objective: "Turn the mature request into a concrete acceptance contract before any implementation work."
+    inputs:
+      - "goal.md"
+      - "acceptance-contract.md"
+      - "Current repository source, tests, scripts, docs, and dirty worktree status"
+    constraints:
+      - "Read-only."
+      - "Do not edit product files."
+      - "Do not start implementation."
+      - "Prefer observable owner outcomes over internal task completion."
+    expected_output:
+      - "design_concept: shared understanding, non-goals, and decision dependencies"
+      - "ubiquitous_language: domain terms, overloaded words, and forbidden synonyms"
+      - "module_map: relevant deep modules, boundaries, and shallow-module risks"
+      - "interface_contract: public behavior and boundaries that tests should target"
+      - "test_strategy: acceptance tests, unit/integration boundaries, mocks, browser or visual checks if relevant"
+      - "feedback_policy: targeted test cadence, typecheck, browser checks, and full-suite timing"
+      - "acceptance_contract_updates: exact end-state evidence and failure modes"
+      - "dirty_worktree_risk_map: unrelated files that must stay untouched"
+      - "impact_assessment covering db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs"
+    receipt:
+      result: done
+      summary: "Scout mapping for full Docker realtime product completed. The product path builds on existing runtime and API server slices, then adds scheduler/SSE recovery, persistence, demo adapters, backend entrypoint, frontend hook integration, Docker/proxy wiring, and docs."
+      design_concept: "Make the Docker backend the live data owner while preserving the existing React dashboard contract. The backend runs source adapters through a scheduler, persists snapshots/history/health in a Docker-friendly local store, exposes /api/weather, /api/events, /api/health, and the frontend uses backend HTTP/SSE with Supabase fallback until cutover is proven."
+      ubiquitous_language:
+        backend live path: "Docker-ready beacon API replacing Supabase for live updates only"
+        fallback: "existing Supabase hook or HTTP snapshot polling when backend SSE is unavailable"
+        demo adapter: "no-secret fake source used for tests and local smoke"
+        persistent store: "local durable store for snapshot, observations, and health"
+        scheduler: "background loop that calls runtime.pollDueSources on interval"
+        heartbeat: "SSE keepalive event/comment for proxies and client liveness"
+      module_map:
+        runtime: server/realtime/weatherRuntime.js
+        api_server: server/realtime/weatherApiServer.js
+        future_scheduler: server/realtime/weatherScheduler.js
+        future_store: server/realtime/weatherStore.js
+        future_demo_adapters: server/realtime/demoSources.js
+        future_entrypoint: server/realtime/server.js
+        frontend_current_hook: src/hooks/useWeatherData.js
+        frontend_target_hook: "new or refactored hook preserving useWeatherData return shape"
+        deployment: "Dockerfile, docker-compose.yml, nginx.conf"
+      interface_contract:
+        backend: "/api/weather snapshot, /api/events SSE, /api/health diagnostics"
+        frontend: "windData/surfData/waterData/isLoading/lastUpdated/error/isRealtime unchanged"
+        persistence: "load snapshot on boot, save changed observations and health, survive restart"
+        scheduler: "no real external APIs in tests; demo mode works without secrets"
+      test_strategy:
+        slice1: "scheduler heartbeat/snapshot SSE"
+        slice2: "persistence store"
+        slice3: "entrypoint demo backend smoke"
+        slice4: "frontend hook backend/SSE/fallback"
+        slice5: "Docker/proxy/docs smoke"
+      feedback_policy: "Each slice starts red, then green with targeted tests. Run npm test, targeted eslint, build, and diff checks. Global npm run lint may remain blocked by pre-existing out-of-scope issues unless separately fixed."
+      dirty_worktree_risk_map: "Untracked .claude is unrelated. Existing docs/server artifacts are prior DevLoop work. Branch is behind origin/master. Do not revert unrelated files."
+      impact_assessment:
+        db_schema_migrations: "none external; local persistence schema/file only"
+        data_backfill: "none required initially"
+        env_secrets: "future real adapters need server-side secrets only; tests must not require them"
+        auth_permissions: "no auth changes; CORS/proxy later"
+        api_contract: "backend /api/* becomes product contract"
+        ui_routes: none
+        background_jobs: "scheduler loop inside backend"
+        external_services: "future real adapters only; demo/tests avoid external calls"
+        deploy_rollback: "keep Supabase fallback until cutover"
+        observability: "/api/health, sourceHealth, sseClients"
+        docs: "update golden state/deployment docs"
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Approve the acceptance contract and choose the largest safe red-test package."
+    inputs:
+      - "T001 receipt"
+      - "Updated acceptance-contract.md if T001 changed it"
+    constraints:
+      - "Do not implement."
+      - "Reject implementation work before tests can express the oracle."
+      - "Reject vague acceptance criteria that cannot be verified."
+      - "Choose a useful vertical slice, not tiny helper-only work."
+    expected_output:
+      - "Decision: approved | needs_more_evidence | blocked"
+      - "Approved design_concept"
+      - "Approved ubiquitous_language"
+      - "feedback_policy"
+      - "test_strategy"
+      - "module_map"
+      - "interface_contract"
+      - "architecture_review"
+      - "Exact Worker objective for red tests"
+      - "allowed_files for T003"
+      - "verify commands for T003"
+      - "stop_if conditions for T003"
+      - "impact_assessment_ref"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Approved first product slice: scheduler plus SSE heartbeat/snapshot recovery around existing runtime/API. This is the largest safe next step before persistence/frontend/Docker."
+      architecture_review: "The current runtime and API server are green. The next missing live-product behavior is a long-running scheduler and stronger SSE stream semantics: heartbeat and initial snapshot. This can be tested without external services, secrets, Docker, SQLite, or frontend migration."
+      task_updates:
+        T003:
+          allowed_files:
+            - server/realtime/weatherScheduler.test.js
+            - server/realtime/weatherApiServer.test.js
+          verify:
+            - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+          stop_if:
+            - "Need implementation changes before red evidence."
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T004:
+          allowed_files:
+            - server/realtime/weatherScheduler.js
+            - server/realtime/weatherScheduler.test.js
+            - server/realtime/weatherApiServer.js
+            - server/realtime/weatherApiServer.test.js
+            - server/realtime/weatherRuntime.js
+            - server/realtime/weatherRuntime.test.js
+          verify:
+            - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+            - "npm test -- server/realtime/weatherRuntime.test.js"
+            - "npm test"
+            - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+            - "npm run build"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "No prior red_test evidence exists."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+            - "Need frontend migration, Docker wiring, SQLite, or real upstream credentials before this slice is green."
+            - "Verification fails twice without a clear bounded fix."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T005:
+          allowed_files:
+            - server/realtime/weatherScheduler.js
+            - server/realtime/weatherScheduler.test.js
+            - server/realtime/weatherApiServer.js
+            - server/realtime/weatherApiServer.test.js
+            - server/realtime/weatherRuntime.js
+            - server/realtime/weatherRuntime.test.js
+            - "docs/goals/beacon-live-docker-realtime-product/**"
+          verify:
+            - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+            - "npm test"
+            - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+            - "npm run build"
+            - "git diff --check"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+            - "Verification fails twice without understood cause."
+          impact_assessment_ref: T001.receipt.impact_assessment
+  - id: T003
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write the failing acceptance tests selected by Judge, without production implementation."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T002 approved acceptance contract"
+      - "T002 allowed_files and verify commands"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherScheduler.test.js
+      - server/realtime/weatherApiServer.test.js
+    verify:
+      - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+    stop_if:
+      - "Need implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+    receipt:
+      result: done
+      summary: "Red tests added for scheduler cadence/non-overlap and SSE recovery semantics. The targeted verification fails for the intended reasons before implementation."
+      changed_files:
+        - server/realtime/weatherScheduler.test.js
+        - server/realtime/weatherApiServer.test.js
+      evidence:
+        - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js exits 1"
+        - "weatherScheduler.test.js fails to resolve ./weatherScheduler.js"
+        - "weatherApiServer.test.js fails with No matching SSE frame within 500ms for event: weather:snapshot"
+      next_recommendation: "Implement createWeatherScheduler and add SSE initial snapshot plus heartbeat support in createWeatherApiServer."
+  - id: T004
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement the largest safe useful slice that makes the approved red tests pass."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T003 red test receipt"
+      - "T002 implementation boundaries"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherScheduler.js
+      - server/realtime/weatherScheduler.test.js
+      - server/realtime/weatherApiServer.js
+      - server/realtime/weatherApiServer.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+    verify:
+      - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+      - "npm test -- server/realtime/weatherRuntime.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+      - "npm run build"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "No prior red_test evidence exists."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need frontend migration, Docker wiring, SQLite, or real upstream credentials before this slice is green."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented the first realtime backend product slice: a non-overlapping weather scheduler plus SSE initial snapshot and heartbeat support while preserving weather:update delivery."
+      changed_files:
+        - server/realtime/weatherScheduler.js
+        - server/realtime/weatherScheduler.test.js
+        - server/realtime/weatherApiServer.js
+        - server/realtime/weatherApiServer.test.js
+      green_test:
+        command: "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+        result: pass
+        details: "2 files, 5 tests passed"
+      verify:
+        - "npm test -- server/realtime/weatherRuntime.test.js passed: 1 file, 3 tests"
+        - "npm test passed: 11 files, 146 tests"
+        - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Review the slice receipt, then continue to the next product slice: persistence or backend entrypoint depending on Judge guidance."
+  - id: T005
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run the full verification package, including browser or visual checks when the acceptance contract requires them."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T004 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherScheduler.js
+      - server/realtime/weatherScheduler.test.js
+      - server/realtime/weatherApiServer.js
+      - server/realtime/weatherApiServer.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+      - "docs/goals/beacon-live-docker-realtime-product/**"
+    verify:
+      - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Verified the scheduler/SSE backend slice against the approved package. The slice is green and preserves the existing runtime/API behavior."
+      changed_files:
+        - server/realtime/weatherScheduler.js
+        - server/realtime/weatherScheduler.test.js
+        - server/realtime/weatherApiServer.js
+        - server/realtime/weatherApiServer.test.js
+      green_test:
+        command: "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+        result: pass
+        details: "2 files, 5 tests passed"
+      verify:
+        - "npm test passed: 11 files, 146 tests"
+        - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Run Judge/PM review and then continue with the next missing acceptance slice: durable persistence, backend entrypoint/demo adapters, frontend SSE hook, Docker wiring, and smoke proof."
+  - id: T006
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review architecture, spec fidelity, and test evidence before shipping."
+    inputs:
+      - "T001 through T005 receipts"
+      - "Current diff"
+      - "Last verification output"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if the implementation only satisfies internal tasks but not the original oracle."
+      - "Reject hidden design drift, shallow-module sprawl, or missing acceptance evidence."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Scheduler/SSE recovery slice is approved, but the original oracle is not complete. The next required slice is local durable persistence wired to runtime recovery and observation recording."
+      design_delta: "Backend live path now has a scheduler contract plus SSE initial snapshot and heartbeat. It still lacks durable state across process restarts, so persistence must be added before entrypoint/frontend/Docker cutover."
+      architecture_review: "Implementation stays in small server/realtime modules, preserves runtime API semantics, keeps Supabase untouched, and passes targeted plus full verification. No hidden external service, secret, migration, frontend, or Docker dependency was introduced."
+      oracle_coverage:
+        api_weather: true
+        api_events: true
+        api_health: true
+        scheduler: true
+        sse_weather_update: true
+        sse_initial_snapshot: true
+        sse_heartbeat: true
+        durable_persistence: false
+        frontend_sse_hook: false
+        docker_ready_entrypoint: false
+        supabase_fallback_preserved: true
+      remaining_risks:
+        - "No persisted snapshot/history/health yet, so restart recovery is not product-ready."
+        - "No backend entrypoint/demo adapters yet for long-running no-secret operation."
+        - "Frontend still uses the existing Supabase live path until a later slice."
+        - "Docker/proxy smoke proof is still missing."
+      another_worker_slice_needed: true
+      next_slice: "T007-T010 local durable persistence"
+  - id: T007
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write failing persistence tests for a Docker-friendly local weather store and runtime snapshot/observation persistence."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T006 Judge receipt"
+      - "T001 interface_contract"
+      - "T001 test_strategy"
+      - "T001 feedback_policy"
+      - "T001 impact_assessment"
+      - "Current server/realtime runtime tests"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherStore.test.js
+      - server/realtime/weatherRuntime.test.js
+    verify:
+      - "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need production implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need native dependencies, DB migrations, secrets, auth/RLS changes, external services, frontend migration, Docker wiring, or deploy work outside allowed_files."
+    receipt:
+      result: done
+      summary: "Added red persistence tests for a Docker-friendly file weather store and runtime snapshot/observation persistence."
+      changed_files:
+        - server/realtime/weatherStore.test.js
+        - server/realtime/weatherRuntime.test.js
+      red_evidence:
+        command: "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+        result: "failed as expected"
+        failure: "weatherStore.test.js cannot resolve ./weatherStore.js, and weatherRuntime.test.js shows createWeatherRuntime does not restore initialSnapshot or persist observations yet."
+      verify:
+        - "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js exits 1 before implementation"
+      next_recommendation: "Implement createFileWeatherStore and wire optional initialSnapshot/store persistence into createWeatherRuntime."
+  - id: T008
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement the local durable persistence slice that makes T007 red tests pass."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T007 red test receipt"
+      - "T006 architecture_review"
+      - "T001 interface_contract"
+      - "T001 module_map"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherStore.js
+      - server/realtime/weatherStore.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+    verify:
+      - "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+      - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+      - "npm run build"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "No prior red_test evidence exists."
+      - "Need native dependencies, DB migrations, secrets, auth/RLS changes, external services, frontend migration, Docker wiring, or deploy work outside allowed_files."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented local durable weather persistence with an atomic JSON file store and optional runtime persistence/recovery hooks for snapshots and observations."
+      changed_files:
+        - server/realtime/weatherStore.js
+        - server/realtime/weatherStore.test.js
+        - server/realtime/weatherRuntime.js
+        - server/realtime/weatherRuntime.test.js
+      green_test:
+        command: "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+        result: pass
+        details: "2 files, 5 tests passed"
+      verify:
+        - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js passed: 2 files, 5 tests"
+        - "npm test passed: 12 files, 148 tests"
+        - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Run the persistence verification worker, then Judge the next slice: backend entrypoint with demo adapters and health smoke."
+  - id: T009
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run the approved persistence verification package and capture evidence."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T008 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/weatherStore.js
+      - server/realtime/weatherStore.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+      - "docs/goals/beacon-live-docker-realtime-product/**"
+    verify:
+      - "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Verified the persistence slice against the approved package with fresh command output."
+      changed_files:
+        - server/realtime/weatherStore.js
+        - server/realtime/weatherStore.test.js
+        - server/realtime/weatherRuntime.js
+        - server/realtime/weatherRuntime.test.js
+      green_test:
+        command: "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+        result: pass
+        details: "2 files, 5 tests passed"
+      verify:
+        - "npm test passed: 12 files, 148 tests"
+        - "npx eslint server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Judge the persistence slice and continue with backend entrypoint plus demo adapters for a long-running local service smoke test."
+  - id: T010
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review persistence architecture, oracle coverage, and decide the next product slice."
+    inputs:
+      - "T007 through T009 receipts"
+      - "Current diff"
+      - "Original oracle"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if persistence exists only as isolated helpers and is not wired into runtime state recovery/observation recording."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Persistence slice is approved and wired into runtime recovery/observation recording. The full oracle still requires a run-ready backend service, frontend SSE consumption, and Docker/proxy proof."
+      design_delta: "Backend runtime now accepts initialSnapshot and store hooks; local file persistence saves snapshots and observations atomically without native dependencies or secrets."
+      architecture_review: "Persistence is not an isolated helper: runtime restores prior snapshot data, initializes hashes/next poll timing from recovered state, appends observations during polling, and saves snapshots after due-source polls. This preserves existing scheduler/API behavior and keeps the live path server-side."
+      oracle_coverage:
+        durable_persistence: true
+        snapshot_recovery: true
+        observation_recording: true
+        api_weather: true
+        api_events: true
+        api_health: true
+        scheduler: true
+        backend_entrypoint: false
+        demo_no_secret_operation: false
+        frontend_sse_hook: false
+        docker_ready_entrypoint: false
+      remaining_risks:
+        - "No long-running service entrypoint yet wires runtime, scheduler, store, and API server together."
+        - "No demo adapters yet for no-secret local smoke operation."
+        - "Frontend still has not switched to backend SSE with Supabase fallback."
+        - "Docker/proxy smoke proof remains missing."
+      another_worker_slice_needed: true
+      next_slice: "T011-T014 backend service entrypoint with demo adapters"
+  - id: T011
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write failing tests for a long-running no-secret backend service entrypoint with demo weather adapters and health/weather smoke behavior."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T010 Judge receipt"
+      - "T001 interface_contract"
+      - "T001 test_strategy"
+      - "T001 feedback_policy"
+      - "T001 impact_assessment"
+      - "Current server/realtime modules"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/demoSources.test.js
+      - server/realtime/server.test.js
+    verify:
+      - "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need production implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need real external weather credentials, frontend migration, Docker wiring, deploy, or secrets outside allowed_files."
+    receipt:
+      result: done
+      summary: "Added red tests for no-secret demo adapters and a local backend service entrypoint that exposes health/weather endpoints and persists demo state."
+      changed_files:
+        - server/realtime/demoSources.test.js
+        - server/realtime/server.test.js
+      red_evidence:
+        command: "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js"
+        result: "failed as expected"
+        failure: "demoSources.test.js cannot resolve ./demoSources.js and server.test.js cannot resolve ./server.js."
+      verify:
+        - "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js exits 1 before implementation"
+      next_recommendation: "Implement createDemoWeatherSources and createWeatherService wiring runtime, file store, scheduler, and API server."
+  - id: T012
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement demo adapters and a backend service entrypoint that wires runtime, store, scheduler, and API server without external secrets."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T011 red test receipt"
+      - "T010 architecture_review"
+      - "T001 interface_contract"
+      - "T001 module_map"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/demoSources.js
+      - server/realtime/demoSources.test.js
+      - server/realtime/server.js
+      - server/realtime/server.test.js
+      - server/realtime/weatherApiServer.js
+      - server/realtime/weatherApiServer.test.js
+      - server/realtime/weatherRuntime.js
+      - server/realtime/weatherRuntime.test.js
+      - server/realtime/weatherScheduler.js
+      - server/realtime/weatherScheduler.test.js
+      - server/realtime/weatherStore.js
+      - server/realtime/weatherStore.test.js
+    verify:
+      - "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js"
+      - "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js"
+      - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/demoSources.js server/realtime/demoSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+      - "npm run build"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "No prior red_test evidence exists."
+      - "Need real external weather credentials, frontend migration, Docker wiring, deploy, or secrets outside allowed_files."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented a no-secret local backend service entrypoint with deterministic demo weather sources. The service wires file persistence, runtime recovery, scheduler, and HTTP/SSE API server, and can be smoke-tested on a free local port."
+      changed_files:
+        - server/realtime/demoSources.js
+        - server/realtime/demoSources.test.js
+        - server/realtime/server.js
+        - server/realtime/server.test.js
+        - server/realtime/weatherScheduler.js
+      green_test:
+        command: "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js"
+        result: pass
+        details: "2 files, 2 tests passed"
+      verify:
+        - "npm test -- server/realtime/weatherStore.test.js server/realtime/weatherRuntime.test.js passed: 2 files, 5 tests"
+        - "npm test -- server/realtime/weatherScheduler.test.js server/realtime/weatherApiServer.test.js passed: 2 files, 5 tests"
+        - "npm test passed: 14 files, 150 tests"
+        - "npx eslint server/realtime/demoSources.js server/realtime/demoSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Run backend service verification, then continue with frontend backend-SSE hook plus Supabase fallback."
+  - id: T013
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run backend service verification and capture smoke evidence."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T012 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/demoSources.js
+      - server/realtime/demoSources.test.js
+      - server/realtime/server.js
+      - server/realtime/server.test.js
+      - "docs/goals/beacon-live-docker-realtime-product/**"
+    verify:
+      - "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/demoSources.js server/realtime/demoSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Verified backend service entrypoint and demo adapter smoke behavior with fresh command output."
+      changed_files:
+        - server/realtime/demoSources.js
+        - server/realtime/demoSources.test.js
+        - server/realtime/server.js
+        - server/realtime/server.test.js
+        - server/realtime/weatherScheduler.js
+      green_test:
+        command: "npm test -- server/realtime/demoSources.test.js server/realtime/server.test.js"
+        result: pass
+        details: "2 files, 2 tests passed; smoke covers /api/health, /api/weather, and persisted demo state"
+      verify:
+        - "npm test passed: 14 files, 150 tests"
+        - "npx eslint server/realtime/demoSources.js server/realtime/demoSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/weatherRuntime.js server/realtime/weatherRuntime.test.js server/realtime/weatherStore.js server/realtime/weatherStore.test.js server/realtime/weatherApiServer.js server/realtime/weatherApiServer.test.js server/realtime/weatherScheduler.js server/realtime/weatherScheduler.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Judge this service slice, then continue with frontend backend-SSE hook and fallback behavior."
+  - id: T014
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review backend service entrypoint and decide the frontend/Docker cutover slice."
+    inputs:
+      - "T011 through T013 receipts"
+      - "Current diff"
+      - "Original oracle"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if the backend cannot run without external secrets for local smoke verification."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Backend service entrypoint is approved: it runs locally without external secrets, exposes health/weather via the shared API server, and persists demo weather state. The next required product slice is frontend backend-SSE consumption with fallback."
+      design_delta: "The backend live path now has a concrete service assembly: demo sources, file store, runtime recovery, scheduler, and HTTP/SSE API server. The dashboard still needs to opt into this backend path via environment configuration."
+      architecture_review: "The service is small and compositional, reusing existing runtime/API/scheduler/store modules. It starts with an awaited initial poll for smoke reliability, then schedules non-overlapping updates. No Supabase code was removed and no browser secrets were introduced."
+      oracle_coverage:
+        backend_entrypoint: true
+        demo_no_secret_operation: true
+        health_weather_smoke: true
+        durable_persistence: true
+        scheduler: true
+        sse_api: true
+        frontend_sse_hook: false
+        supabase_fallback_preserved: true
+        docker_proxy: false
+      remaining_risks:
+        - "Frontend still reads from Supabase/Edge Function unless a new backend mode is implemented."
+        - "No browser-facing SSE merge/fallback proof yet."
+        - "Docker/proxy wiring and deployment docs are still missing."
+      another_worker_slice_needed: true
+      next_slice: "T015-T018 frontend backend-SSE hook integration"
+  - id: T015
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write failing frontend hook tests for backend HTTP/SSE mode, event merging, and HTTP polling fallback when SSE fails."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T014 Judge receipt"
+      - "T001 interface_contract"
+      - "T001 test_strategy"
+      - "T001 feedback_policy"
+      - "T001 impact_assessment"
+      - "Current src/hooks/useWeatherData.js"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - src/hooks/useWeatherData.test.jsx
+    verify:
+      - "npm test -- src/hooks/useWeatherData.test.jsx"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need production implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need backend implementation, real Supabase credentials, external weather services, Docker wiring, or deploy work outside allowed_files."
+    receipt:
+      result: done
+      summary: "Added red frontend hook tests for backend HTTP/SSE mode, weather:update merging, and HTTP fallback when SSE errors."
+      changed_files:
+        - src/hooks/useWeatherData.test.jsx
+      red_evidence:
+        command: "npm test -- src/hooks/useWeatherData.test.jsx"
+        result: "failed as expected"
+        failure: "useWeatherData still calls the Supabase Edge Function, does not open http://backend.local/api/events, and does not refresh backend data after SSE error."
+      verify:
+        - "npm test -- src/hooks/useWeatherData.test.jsx exits 1 before implementation"
+      next_recommendation: "Implement VITE_WEATHER_BACKEND_URL mode in useWeatherData with backend snapshot fetch, EventSource weather:snapshot/weather:update merge, and backend HTTP fallback on SSE errors while preserving legacy Supabase fallback."
+  - id: T016
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement backend HTTP/SSE mode in useWeatherData while preserving existing Supabase fallback behavior and return shape."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T015 red test receipt"
+      - "T014 architecture_review"
+      - "T001 interface_contract"
+      - "T001 module_map"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - src/hooks/useWeatherData.js
+      - src/hooks/useWeatherData.test.jsx
+    verify:
+      - "npm test -- src/hooks/useWeatherData.test.jsx"
+      - "npm test"
+      - "npx eslint src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx"
+      - "npm run build"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "No prior red_test evidence exists."
+      - "Need backend implementation, real Supabase credentials, external weather services, Docker wiring, or deploy work outside allowed_files."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented backend HTTP/SSE mode in useWeatherData behind VITE_WEATHER_BACKEND_URL while preserving the legacy Supabase path when the backend URL is absent."
+      changed_files:
+        - src/hooks/useWeatherData.js
+        - src/hooks/useWeatherData.test.jsx
+      green_test:
+        command: "npm test -- src/hooks/useWeatherData.test.jsx"
+        result: pass
+        details: "1 file, 2 tests passed"
+      verify:
+        - "npm test passed: 15 files, 152 tests"
+        - "npx eslint src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Run formal frontend hook verification, then continue with Docker/proxy/docs final product wiring."
+  - id: T017
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run frontend hook verification and capture evidence."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T016 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - src/hooks/useWeatherData.js
+      - src/hooks/useWeatherData.test.jsx
+      - "docs/goals/beacon-live-docker-realtime-product/**"
+    verify:
+      - "npm test -- src/hooks/useWeatherData.test.jsx"
+      - "npm test"
+      - "npx eslint src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Verified frontend backend-SSE hook integration with fresh command output."
+      changed_files:
+        - src/hooks/useWeatherData.js
+        - src/hooks/useWeatherData.test.jsx
+      green_test:
+        command: "npm test -- src/hooks/useWeatherData.test.jsx"
+        result: pass
+        details: "1 file, 2 tests passed; covers backend snapshot, EventSource subscription, weather:update merge, and HTTP refresh after SSE error"
+      verify:
+        - "npm test passed: 15 files, 152 tests"
+        - "npx eslint src/hooks/useWeatherData.js src/hooks/useWeatherData.test.jsx passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+      next_recommendation: "Judge frontend integration, then finish Docker/proxy/docs and local smoke proof."
+  - id: T018
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review frontend backend-SSE hook integration and decide Docker/proxy/docs final slice."
+    inputs:
+      - "T015 through T017 receipts"
+      - "Current diff"
+      - "Original oracle"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if hook tests do not prove SSE merge and fallback behavior."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Frontend backend-SSE integration is approved: tests prove backend snapshot load, EventSource subscription, weather:update merge, and HTTP refresh after SSE error. Final required slice is Docker/proxy/docs plus backend smoke evidence."
+      design_delta: "The dashboard can now opt into the Docker backend via VITE_WEATHER_BACKEND_URL while preserving the legacy Supabase path when the variable is absent."
+      architecture_review: "The hook keeps its existing return shape and limits backend mode to browser-safe HTTP/SSE endpoints. No server secrets move to the client. Realtime updates are merged as full backend snapshots, and SSE failures trigger an HTTP refresh fallback."
+      oracle_coverage:
+        frontend_sse_hook: true
+        frontend_event_merge: true
+        frontend_http_fallback: true
+        supabase_fallback_preserved: true
+        backend_entrypoint: true
+        durable_persistence: true
+        docker_proxy: false
+        deployment_docs: false
+        backend_smoke_proof: true
+      remaining_risks:
+        - "Docker Compose still serves only the static frontend and does not run/proxy the weather API service."
+        - "Nginx has no /api proxy for SSE/HTTP backend paths yet."
+        - "Deployment docs still describe the old Supabase-only Docker model."
+      another_worker_slice_needed: true
+      next_slice: "T019-T022 Docker/proxy/docs final wiring"
+  - id: T019
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write failing deployment configuration tests for Docker weather-api service, frontend backend URL injection, Nginx /api proxy, and realtime deployment docs."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T018 Judge receipt"
+      - "T001 interface_contract"
+      - "T001 test_strategy"
+      - "T001 feedback_policy"
+      - "T001 impact_assessment"
+      - "Current Dockerfile, docker-compose.yml, nginx.conf, DEPLOY_DOCKER.md"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/deploymentConfig.test.js
+    verify:
+      - "npm test -- server/realtime/deploymentConfig.test.js"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need production implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need real external credentials, deploy, registry push, or production server access outside allowed_files."
+    receipt:
+      result: done
+      summary: "Added red deployment config tests for the realtime Docker target: weather-api image/service, persisted data volume, frontend backend URL injection, Nginx /api proxy, and docs."
+      changed_files:
+        - server/realtime/deploymentConfig.test.js
+      red_evidence:
+        command: "npm test -- server/realtime/deploymentConfig.test.js"
+        result: "failed as expected"
+        failure: "Dockerfile lacks AS weather-api and VITE_WEATHER_BACKEND_URL; docker-compose lacks weather-api service and weather-data volume; nginx.conf lacks /api proxy; DEPLOY_DOCKER.md lacks realtime backend instructions."
+      verify:
+        - "npm test -- server/realtime/deploymentConfig.test.js exits 1 before implementation"
+      next_recommendation: "Update Dockerfile, docker-compose.yml, nginx.conf, .env.example, and DEPLOY_DOCKER.md to wire frontend /api to the weather-api service."
+  - id: T020
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement Docker Compose/Nginx/frontend build wiring and docs for the local realtime backend."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T019 red test receipt"
+      - "T018 architecture_review"
+      - "T001 interface_contract"
+      - "T001 module_map"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - Dockerfile
+      - docker-compose.yml
+      - nginx.conf
+      - DEPLOY_DOCKER.md
+      - .env.example
+      - server/realtime/deploymentConfig.test.js
+    verify:
+      - "npm test -- server/realtime/deploymentConfig.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/deploymentConfig.test.js"
+      - "npm run build"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "No prior red_test evidence exists."
+      - "Need real external credentials, deploy, registry push, or production server access outside allowed_files."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented Docker/Nginx/docs wiring for the realtime backend: frontend build target injects /api, weather-api target runs the Node service, compose starts both services with a weather-data volume, and Nginx proxies /api including SSE."
+      changed_files:
+        - Dockerfile
+        - docker-compose.yml
+        - nginx.conf
+        - DEPLOY_DOCKER.md
+        - .env.example
+        - server/realtime/deploymentConfig.test.js
+      green_test:
+        command: "npm test -- server/realtime/deploymentConfig.test.js"
+        result: pass
+        details: "1 file, 4 tests passed"
+      verify:
+        - "npm test passed: 16 files, 156 tests"
+        - "npx eslint server/realtime/deploymentConfig.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "git diff --check passed"
+        - "docker compose config passed"
+        - "Node smoke service returned 200 /api/health with ok sourceHealth on an ephemeral local port"
+      next_recommendation: "Run final deployment verification worker and then final Judge pre-shipping audit."
+  - id: T021
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run final deployment verification, including local backend smoke health proof."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T020 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - Dockerfile
+      - docker-compose.yml
+      - nginx.conf
+      - DEPLOY_DOCKER.md
+      - .env.example
+      - server/realtime/deploymentConfig.test.js
+      - "docs/goals/beacon-live-docker-realtime-product/**"
+    verify:
+      - "npm test -- server/realtime/deploymentConfig.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/deploymentConfig.test.js"
+      - "npm run build"
+      - "node server/realtime/server.js smoke on an ephemeral local port; fetch /api/health"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need files outside allowed_files."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Final deployment verification passed, including Docker config checks and a local backend smoke health proof."
+      changed_files:
+        - Dockerfile
+        - docker-compose.yml
+        - nginx.conf
+        - DEPLOY_DOCKER.md
+        - .env.example
+        - server/realtime/deploymentConfig.test.js
+      green_test:
+        command: "npm test -- server/realtime/deploymentConfig.test.js"
+        result: pass
+        details: "1 file, 4 tests passed"
+      verify:
+        - "npm test passed: 16 files, 156 tests"
+        - "npx eslint server/realtime/deploymentConfig.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed and includes weather-api, VITE_WEATHER_BACKEND_URL=/api, and weather-data"
+        - "Node smoke service on ephemeral port returned /api/health status 200 with serviceStatus ok and sourceCount 2"
+        - "git diff --check passed"
+      next_recommendation: "Run final Judge pre-shipping review against the original oracle."
+  - id: T022
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Final pre-shipping review of realtime Docker product scope before PM shipping task."
+    inputs:
+      - "All implementation and verification receipts through T021"
+      - "Current diff"
+      - "Original oracle"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if Docker/proxy docs and backend smoke evidence are missing."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Final pre-shipping review approved for the Docker realtime product path. The implementation now provides a runnable local backend, durable persistence, HTTP/SSE API, frontend backend-SSE mode with fallback, Docker/Nginx wiring, docs, and smoke evidence."
+      design_delta: "Beacon Live no longer depends on Supabase Realtime for the new live path when VITE_WEATHER_BACKEND_URL is set. The Docker deployment now runs a weather-api service behind Nginx /api, with a persisted local store and demo no-secret adapters for smokeable operation."
+      architecture_review: "The solution is modular: demoSources/server/weatherRuntime/weatherScheduler/weatherStore/weatherApiServer are separated; the frontend hook keeps its return shape; Nginx owns browser-facing /api; Docker Compose persists /data/weather-state.json. Tests cover scheduler cadence, SSE snapshot/heartbeat/update, persistence recovery, service smoke, frontend SSE merge/fallback, and deployment config. Supabase remains untouched as fallback when backend URL is absent."
+      oracle_coverage:
+        api_weather: true
+        api_events: true
+        api_health: true
+        scheduler: true
+        durable_persistence: true
+        frontend_sse_hook: true
+        supabase_fallback_preserved: true
+        docker_compose: true
+        nginx_api_proxy: true
+        local_smoke_health: true
+        no_external_secrets_required_for_tests: true
+        real_external_weather_adapters_in_node: false
+      remaining_risks:
+        - "The Docker backend currently ships with deterministic demo adapters; the previous Supabase Edge Function remains the real external-weather fallback path. Porting real upstream adapters to Node should be the next production-hardening slice for full Supabase independence."
+        - "No full docker compose up runtime smoke was executed; docker compose config and Node backend smoke were executed."
+      another_worker_slice_needed: false
+  - id: T998
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Commit all goal-related changes and push the current branch once verification is green."
+    inputs:
+      - "Approved implementation and verification receipts"
+      - "Current git status"
+    constraints:
+      - "Do not include unrelated dirty files."
+      - "If the workspace is not a git repository, record shipping_blocker: no_git_repository."
+      - "If no GitHub remote exists, record shipping_blocker: no_github_remote."
+    expected_output:
+      - "Or shipping_blocker: no_git_repository | no_github_remote"
+      - "Unrelated dirty files left untouched"
+      - "Committed files"
+      - "Push result"
+      - "Remote branch"
+      - "Commit SHA"
+      - "commit_sha"
+      - "remote_branch or push string"
+      - "push_result"
+      - "committed_files"
+      - "unrelated_dirty_files_left_untouched"
+    receipt:
+      result: done
+      summary: "Committed and pushed the realtime Docker backend product branch with goal-scoped files only. Unrelated .claude files were left untouched."
+      commit_sha: d41682c6a2fa782c9d5d056cc1d3c05c86bf783b
+      remote_branch: origin/codex/beacon-live-docker-realtime-product
+      push_result: "pushed new branch and set upstream"
+      committed_files:
+        - Dockerfile
+        - docker-compose.yml
+        - nginx.conf
+        - DEPLOY_DOCKER.md
+        - .env.example
+        - "server/realtime/**"
+        - src/hooks/useWeatherData.js
+        - src/hooks/useWeatherData.test.jsx
+        - "docs/goals/**"
+      unrelated_dirty_files_left_untouched:
+        - .claude/
+        - docs/goals/beacon-live-realtime-docker-golden-state/.goalbuddy-board/
+      verify:
+        - "npm test passed: 16 files, 156 tests"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed"
+        - "Node smoke /api/health returned 200 ok with 2 sources"
+        - "git push -u origin codex/beacon-live-docker-realtime-product passed"
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit whether the full original outcome is complete."
+    inputs:
+      - "design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, and design_delta evidence"
+      - "All done task receipts"
+      - "Last verification"
+      - "Current dirty diff"
+      - "Quality checker final output"
+      - "Completed impact_assessment receipt"
+      - "T998 shipping proof when shipping is required"
+    constraints:
+      - "Reject completion if design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, or design_delta evidence is missing when workflow_safeguards requires it."
+      - "Do not implement."
+      - "Reject completion if required Worker work is still queued or active."
+      - "Reject completion unless impact_assessment covers db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs when impact assessment is required."
+      - "For read-only audit goals with no Worker tasks and no changed_files, accept audit_scope/audit_findings/review/decision evidence instead of TDD, impact_assessment, T998, commit, and push."
+      - "For verification goals, reject completion unless safe test/browser command evidence exists and no changed_files are reported."
+      - "Reject completion unless T998 has a commit SHA and successful push result, or an explicit shipping_blocker for no_git_repository/no_github_remote, when shipping is required."
+    expected_output:
+      - "design_delta"
+      - "workflow_safeguards result"
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Final audit approves the Docker realtime product path against the accepted oracle: backend service, API, scheduler, persistence, SSE frontend mode, fallback preservation, Docker/Nginx/docs, verification, smoke, commit, and push evidence are present."
+      design_delta: "Beacon Live now has a Supabase-independent local live path when VITE_WEATHER_BACKEND_URL is set: weather-api owns polling/state, Nginx exposes /api, the frontend consumes HTTP/SSE, and Supabase remains available when the backend URL is absent."
+      workflow_safeguards:
+        design_concept: true
+        ubiquitous_language: true
+        feedback_policy: true
+        test_strategy: true
+        module_map: true
+        interface_contract: true
+        architecture_review: true
+        design_delta: true
+        impact_assessment: true
+        shipping_proof: true
+      architecture_review: "The implementation is modular and test-backed. Runtime, scheduler, API, store, service entrypoint, demo adapters, frontend hook, and deployment config each have focused tests. Verification passed with npm test, targeted lint, npm run build, docker compose config, and local Node /api/health smoke. Unrelated .claude and generated board assets remain uncommitted."
+      complete: complete
+      full_outcome_complete: true
+      missing_evidence:
+        []
+      accepted_limitations:
+        - "weather-api currently ships with deterministic demo adapters for no-secret operation; real external Node adapters are the next production-hardening step if Supabase should be removed completely for upstream fetching."
+        - "A full docker compose up runtime smoke was not run; docker compose config plus direct Node service health smoke were run."
+      shipping:
+        commits:
+          - d41682c6a2fa782c9d5d056cc1d3c05c86bf783b
+          - fbc2302
+        remote_branch: origin/codex/beacon-live-docker-realtime-product
+        push_result: pushed

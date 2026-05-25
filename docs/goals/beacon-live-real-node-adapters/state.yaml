@@ -1,0 +1,602 @@
+version: 2
+goal:
+  slug: "beacon-live-real-node-adapters-notes"
+  title: "Beacon Live Real Node Adapters - Notes"
+  status: complete
+  created_at: "2026-05-25"
+  updated_at: "2026-05-25"
+  kind: specific
+  original_request: "# Beacon Live Real Node Adapters - Notes\n\n## Intent\n\nMake the current Docker realtime branch ready for the actual Portainer deployment by replacing demo-only backend data with real server-side weather adapters.\n\nThe owner wants to come back only when the project is ready to deploy and when the remaining action is to add credentials in Portainer.\n\nPort the real upstream weather fetchers from the Supabase Edge Function into Node backend adapters so the Docker `weather-api` can provide real weather data once credentials are supplied in Portainer.\n\n- Do not remove Supabase fallback code.\n- Do not require credentials for automated tests.\n- Do not call real external weather services in unit tests.\n- Do not expose server-side API secrets to the browser.\n- Do not change the dashboard UI.\n- Do not mutate production data.\n- Do not deploy from here.\n- Do not commit `.claude/` or generated `.goalbuddy-board/` assets.\n\n## Non-Goals\n\n- TODO: Name what this goal must not change.\n\n## Proposed Oracle\n\nBeacon Live's Docker branch is ready for Portainer redeploy: weather-api uses real Node adapters when credentials are present, keeps demo fallback for no-secret smoke, exposes the same /api/* contract, passes tests/build/lint/smoke without external network calls, and DEPLOY_DOCKER.md plus .env.example list the exact Portainer credentials to add.\n\n## Suggested Mode\n\nimplementation\n\n## Acceptance Hints\n\n- Red/green tests prove `createRealWeatherSources` builds the expected source list without external network calls.\n- Red/green tests prove credential-gated behavior:\n- Météo-France sources require `METEOFRANCE_KEY`;\n- WindsUp requires `WINDSUP_USER` and `WINDSUP_PASS`;\n- public sources can run without secrets.\n- Red/green tests prove real adapters parse representative fixture payloads into the existing runtime payload shape.\n- Service tests prove `WEATHER_SOURCE_MODE=real` wires real adapters into `weather-api`.\n- Service tests prove `WEATHER_SOURCE_MODE=demo` still works for no-secret smoke.\n- `docker compose config` proves Portainer-facing env variables are wired.\n- `DEPLOY_DOCKER.md` and `.env.example` list exact variables to add in Portainer.\n- `npm test`, targeted eslint, `npm run build`, `git diff --check`, and local `/api/health` smoke pass.\n\n## Risks And Open Questions\n\n- TODO: List ambiguity, missing credentials, operational risks, or decisions needed before implementation.\n\n## Constraints\n\n- TODO: Capture constraints, must-preserve behavior, boundaries, or forbidden changes.\n\n## Ready Mode Command\n\n```bash\nnpm run ready -- --from ./docs/goals/beacon-live-real-node-adapters/brief.md --mode implementation --oracle \"Beacon Live's Docker branch is ready for Portainer redeploy: weather-api uses real Node adapters when credentials are present, keeps demo fallback for no-secret smoke, exposes the same /api/* contract, passes tests/build/lint/smoke without external network calls, and DEPLOY_DOCKER.md plus .env.example list the exact Portainer credentials to add.\" --out docs/goals/beacon-live-real-node-adapters-notes\n```\n\n## Source Notes\n\nCompiled from: /Users/arnaud/Documents/beacon-live-app/docs/goals/beacon-live-real-node-adapters/notes.md\n\n> # Beacon Live Real Node Adapters - Notes\n> \n> ## Intent\n> \n> Make the current Docker realtime branch ready for the actual Portainer deployment by replacing demo-only backend data with real server-side weather adapters.\n> \n> The owner wants to come back only when the project is ready to deploy and when the remaining action is to add credentials in Portainer.\n> \n> ## Current Deployment Context\n> \n> - Portainer stack name: `beacon-live`.\n> - Current production stack is deployed from `https://github.com/arnaudlopez/beacon-live-app.git`.\n> - Current production has one container `beacon-live` on `9888:80`.\n> - Current Portainer env vars:\n>   - `VITE_SUPABASE_URL`\n>   - `VITE_SUPABASE_ANON_KEY`\n>   - `VITE_INFOCLIMAT_TOKEN`\n> - The current branch `codex/beacon-live-docker-realtime-product` already adds:\n>   - `weather-api` backend service;\n>   - `/api/weather`, `/api/events`, `/api/health`;\n>   - frontend `VITE_WEATHER_BACKEND_URL=/api`;\n>   - SSE merge/fallback tests;\n>   - Docker/Nginx proxy wiring;\n>   - local JSON persistence;\n>   - demo adapters for no-secret smoke.\n> \n> ## Goal\n> \n> Port the real upstream weather fetchers from the Supabase Edge Function into Node backend adapters so the Docker `weather-api` can provide real weather data once credentials are supplied in Portainer.\n> \n> ## Non-Goals\n> \n> - Do not remove Supabase fallback code.\n> - Do not require credentials for automated tests.\n> - Do not call real external weather services in unit tests.\n> - Do not expose server-side API secrets to the browser.\n> - Do not change the dashboard UI.\n> - Do not mutate production data.\n> - Do not deploy from here.\n> - Do not commit `.claude/` or generated `.goalbuddy-board/` assets.\n> \n> ## Required Behavior\n> \n> - `weather-api` can run in real mode when credentials are present.\n> - `weather-api` can still run in demo mode for no-secret local smoke.\n> - Real adapters cover, at minimum:\n>   - Météo-France stations already used by the app;\n>   - Pioupiou `1202`;\n>   - eSurfmar Ajaccio/Calvi;\n>   - CANDHIS Revellata/Bonifacio;\n>   - Wunderground stations already used by the app;\n>   - WindsUp Porticcio when `WINDSUP_USER` and `WINDSUP_PASS` are present.\n> - Missing optional credentials should mark/skip only the affected sources rather than crashing the service.\n> - Poll intervals should respect the existing freshness target without hardcoding all sources to one cadence:\n>   - fast sources can poll around 20-30s;\n>   - slow sources should poll slower;\n>   - no source should be polled faster than the backend is configured to support.\n> - Tests should use mocked `fetch`.\n> - Portainer docs should list exactly which environment variables to add.\n> \n> ## Proposed Oracle\n> \n> Beacon Live's Docker branch is ready for Portainer redeploy: `weather-api` uses real Node adapters when credentials are present, keeps demo fallback for no-secret smoke, exposes the same `/api/*` contract, passes tests/build/lint/smoke without external network calls, and `DEPLOY_DOCKER.md` plus `.env.example` list the exact Portainer credentials to add.\n> \n> ## Acceptance\n> \n> - Red/green tests prove `createRealWeatherSources` builds the expected source list without external network calls.\n> - Red/green tests prove credential-gated behavior:\n>   - Météo-France sources require `METEOFRANCE_KEY`;\n>   - WindsUp requires `WINDSUP_USER` and `WINDSUP_PASS`;\n>   - public sources can run without secrets.\n> - Red/green tests prove real adapters parse representative fixture payloads into the existing runtime payload shape.\n> - Service tests prove `WEATHER_SOURCE_MODE=real` wires real adapters into `weather-api`.\n> - Service tests prove `WEATHER_SOURCE_MODE=demo` still works for no-secret smoke.\n> - `docker compose config` proves Portainer-facing env variables are wired.\n> - `DEPLOY_DOCKER.md` and `.env.example` list exact variables to add in Portainer.\n> - `npm test`, targeted eslint, `npm run build`, `git diff --check`, and local `/api/health` smoke pass.\n> \n> ## Suggested Implementation Order\n> \n> 1. Add red tests for real adapter factory behavior and credential-gated source inclusion.\n> 2. Implement Node real weather adapters with injectable fetch/clock/env for tests.\n> 3. Wire `server/realtime/server.js` to choose real adapters when `WEATHER_SOURCE_MODE=real`, demo when `demo`, and sensible default behavior.\n> 4. Update Docker Compose and docs with Portainer variables.\n> 5. Run full verification and push the branch."
+  interpreted_outcome: "Run the prepared LLM-first workflow for Beacon Live Real Node Adapters - Notes."
+  input_shape: specific
+  audience: "Product owner and target users"
+  authority: requested
+  proof_type:
+    - test
+    - artifact
+    - review
+  completion_proof: "Final audit maps red tests, green verification, implementation receipts, and shipping proof back to the oracle."
+  goal_oracle: "Beacon Live's Docker branch is ready for Portainer redeploy: weather-api uses real Node adapters when credentials are present, keeps demo fallback for no-secret smoke, exposes the same /api/* contract, passes tests/build/lint/smoke without external network calls, and DEPLOY_DOCKER.md plus .env.example list the exact Portainer credentials to add."
+  oracle:
+    signal: "Beacon Live's Docker branch is ready for Portainer redeploy: weather-api uses real Node adapters when credentials are present, keeps demo fallback for no-secret smoke, exposes the same /api/* contract, passes tests/build/lint/smoke without external network calls, and DEPLOY_DOCKER.md plus .env.example list the exact Portainer credentials to add."
+    final_proof: "T999 states full_outcome_complete: true and cites passing acceptance evidence, verification commands, design review, and T998 shipping evidence."
+  likely_misfire: "Starting implementation from a plausible plan before converting the owner outcome into acceptance tests and observable proof."
+  constraints:
+    - "Acceptance tests or equivalent observable proof must be written before production implementation."
+    - "Implementation must stay inside Judge-approved allowed_files."
+    - "Unrelated dirty worktree changes must remain untouched."
+
+rules:
+  pm_owns_state: true
+  one_active_task: true
+  max_write_workers: 1
+  no_implementation_without_worker_or_pm_task: true
+  no_completion_without_judge_or_pm_audit: true
+  planning_is_not_completion: true
+  queued_required_worker_blocks_completion: true
+  continuous_until_full_outcome: true
+  missing_input_or_credentials_do_not_stop_goal: true
+  preserve_and_validate_existing_plan: true
+  intake_misfire_must_be_audited: true
+  allow_read_only_goal_without_shipping: true
+  require_quality_checker: true
+  require_tdd_worker_flow: true
+  require_github_ship_task: true
+  require_impact_assessment: true
+  goal_pressure_requires_oracle: true
+
+goal_policy:
+  mode: implementation
+  requires_tdd: true
+  requires_impact_assessment: true
+  requires_shipping: true
+  requires_visual_verification: false
+  requires_migration_proof: false
+  requires_infra_proof: false
+  requires_dependency_review: false
+  requires_dirty_worktree_guard: true
+  requires_refactor_proof: false
+  rationale: "Ready Mode is for app-code or product-behavior work after an LLM-first spec conversation has converged."
+
+workflow_safeguards:
+  requires_design_concept: true
+  requires_ubiquitous_language: true
+  requires_feedback_policy: true
+  requires_test_strategy: true
+  requires_module_map: true
+  requires_interface_contract: true
+  requires_architecture_review: true
+  requires_design_delta: true
+  require_t998_shipping: true
+  require_t999_final_audit: true
+  protect_unrelated_dirty_worktree: true
+
+agents:
+  scout: installed
+  worker: installed
+  judge: installed
+
+active_task: null
+tasks:
+  - id: T001
+    type: scout
+    assignee: Scout
+    status: done
+    objective: "Turn the mature request into a concrete acceptance contract before any implementation work."
+    inputs:
+      - "goal.md"
+      - "acceptance-contract.md"
+      - "Current repository source, tests, scripts, docs, and dirty worktree status"
+    constraints:
+      - "Read-only."
+      - "Do not edit product files."
+      - "Do not start implementation."
+      - "Prefer observable owner outcomes over internal task completion."
+    expected_output:
+      - "design_concept: shared understanding, non-goals, and decision dependencies"
+      - "ubiquitous_language: domain terms, overloaded words, and forbidden synonyms"
+      - "module_map: relevant deep modules, boundaries, and shallow-module risks"
+      - "interface_contract: public behavior and boundaries that tests should target"
+      - "test_strategy: acceptance tests, unit/integration boundaries, mocks, browser or visual checks if relevant"
+      - "feedback_policy: targeted test cadence, typecheck, browser checks, and full-suite timing"
+      - "acceptance_contract_updates: exact end-state evidence and failure modes"
+      - "dirty_worktree_risk_map: unrelated files that must stay untouched"
+      - "impact_assessment covering db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs"
+    receipt:
+      result: done
+      summary: "Scout mapping completed for making the Portainer branch deploy-ready with real Node weather adapters while preserving demo mode and Supabase fallback."
+      design_concept: "Keep weather-api as the server-side live-data owner. Add a real adapter factory beside demoSources with injectable fetch, clock, and env; choose demo or real mode in server.js through WEATHER_SOURCE_MODE; document exact Portainer env vars. Tests must prove source coverage, credential gating, payload parsing, service wiring, and deployment config without network calls."
+      ubiquitous_language:
+        real adapter: "Node source adapter that fetches an upstream weather provider server-side and returns the runtime reading shape"
+        demo adapter: "deterministic no-secret adapter used for smoke tests and fallback"
+        source mode: "WEATHER_SOURCE_MODE choosing demo or real backend sources"
+        credential-gated source: "source excluded or made unavailable unless required server env vars exist"
+        runtime reading shape: "{ source, observedAt, payload: { live, history } } for wind sources and compatible payload objects for mapped IDs"
+        Portainer creds: "environment variables added to the stack, never exposed to browser except Vite public values"
+      module_map:
+        existing_edge_fetchers: "supabase/functions/weather-cache/index.ts contains Deno fetchMF/fetchPP/fetchCD/fetchES/fetchWindsUp/fetchWU behavior to port"
+        demo_sources: "server/realtime/demoSources.js remains no-secret smoke mode"
+        target_real_sources: "server/realtime/realSources.js should host Node adapter factory and parser helpers"
+        service_entrypoint: "server/realtime/server.js should select source mode and pass env/fetch/clock into factories"
+        runtime: "server/realtime/weatherRuntime.js already supports source arrays and persistence"
+        deployment: "Dockerfile docker-compose.yml DEPLOY_DOCKER.md .env.example need server env vars"
+      interface_contract:
+        createRealWeatherSources: "returns runtime sources with stable source ids and pollMs values; accepts { clock, fetchImpl, env, pollMs }"
+        source_fetch: "each source.fetch resolves a runtime reading or throws/returns unavailable in a way runtime isolates per-source failures"
+        server_mode: "WEATHER_SOURCE_MODE=real uses real adapters; WEATHER_SOURCE_MODE=demo uses demo adapters"
+        docs: "Portainer docs list METEOFRANCE_KEY, WINDSUP_USER, WINDSUP_PASS, WEATHER_SOURCE_MODE, WEATHER_POLL_MS, WEATHER_HEARTBEAT_MS"
+      test_strategy:
+        red1: "realSources tests for source list and credential gating"
+        red2: "parser tests with representative fixtures for MeteoFrance, Pioupiou, Wunderground, eSurfmar, CANDHIS, WindsUp"
+        red3: "server test proves WEATHER_SOURCE_MODE=real wires real sources without external calls and demo still works"
+        red4: "deployment config test proves Portainer env vars are present in compose/docs/env example"
+      feedback_policy: "Run targeted adapter/service/deployment tests first, then npm test, targeted eslint for changed files, npm run build, docker compose config, local Node /api/health smoke, git diff --check. Global npm run lint may remain blocked by pre-existing unrelated files; use targeted lint unless scope expands."
+      acceptance_contract_updates: "End-state proof must include mocked-fetch adapter tests, service source-mode tests, docs/env var verification, full test/build verification, local smoke, commit and push. No real credentials or external network required in CI/local tests."
+      dirty_worktree_risk_map: "Untracked .claude/ and docs/goals/beacon-live-realtime-docker-golden-state/.goalbuddy-board/ are unrelated and must remain untouched/uncommitted. Current branch is codex/beacon-live-docker-realtime-product tracking origin. New board files are goal-scoped."
+      impact_assessment:
+        db_schema_migrations: none
+        data_backfill: none
+        env_secrets: "adds server-side METEOFRANCE_KEY and optional WINDSUP_USER/WINDSUP_PASS in Portainer; Wunderground key currently public-compatible but should stay server-side if made configurable"
+        auth_permissions: none
+        api_contract: "/api/weather /api/events /api/health remain same; payload freshness improves when real mode enabled"
+        ui_routes: none
+        background_jobs: "existing weather-api scheduler will call real sources in real mode"
+        external_services: "MeteoFrance, Pioupiou, eSurfmar, CANDHIS, Wunderground, optional WindsUp; tests mock fetch"
+        deploy_rollback: "set WEATHER_SOURCE_MODE=demo or remove VITE_WEATHER_BACKEND_URL to fall back safely; Supabase frontend fallback remains"
+        observability: "sourceHealth records per-source ok/error; /api/health exposes source status"
+        docs: "DEPLOY_DOCKER.md and .env.example must list Portainer variables and smoke commands"
+  - id: T002
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Approve the acceptance contract and choose the largest safe red-test package."
+    inputs:
+      - "T001 receipt"
+      - "Updated acceptance-contract.md if T001 changed it"
+    constraints:
+      - "Do not implement."
+      - "Reject implementation work before tests can express the oracle."
+      - "Reject vague acceptance criteria that cannot be verified."
+      - "Choose a useful vertical slice, not tiny helper-only work."
+    expected_output:
+      - "Decision: approved | needs_more_evidence | blocked"
+      - "Approved design_concept"
+      - "Approved ubiquitous_language"
+      - "feedback_policy"
+      - "test_strategy"
+      - "module_map"
+      - "interface_contract"
+      - "architecture_review"
+      - "Exact Worker objective for red tests"
+      - "allowed_files for T003"
+      - "verify commands for T003"
+      - "stop_if conditions for T003"
+      - "impact_assessment_ref"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Approved one vertical slice for real Node adapters plus Portainer deploy readiness. The red tests should cover adapter source coverage, credential gating, representative parsing, service source-mode wiring, and deploy env documentation."
+      approved_design_concept: "Add real server-side adapter factory beside demo mode, selected by WEATHER_SOURCE_MODE. Keep automated tests no-network through injected fetch/clock/env. Make Portainer redeploy require only environment variables after push."
+      approved_ubiquitous_language:
+        - "real adapter"
+        - "demo adapter"
+        - "source mode"
+        - "credential-gated source"
+        - "runtime reading shape"
+        - "Portainer creds"
+      feedback_policy: "Run targeted tests first, then npm test, targeted eslint for changed files, npm run build, docker compose config, local Node /api/health smoke, and git diff --check. Do not rely on real external APIs in tests."
+      test_strategy: "Red tests first for createRealWeatherSources source list and credential gating, parser fixtures for representative upstreams, createWeatherService real/demo mode wiring, and deployment env docs. Then implement and verify full package."
+      module_map:
+        new_real_sources: server/realtime/realSources.js
+        real_source_tests: server/realtime/realSources.test.js
+        service: "server/realtime/server.js and server/realtime/server.test.js"
+        deployment: "Dockerfile docker-compose.yml DEPLOY_DOCKER.md .env.example server/realtime/deploymentConfig.test.js"
+        existing_runtime: "server/realtime/weatherRuntime.js unchanged unless adapter contract requires small compatibility fix"
+      interface_contract:
+        createRealWeatherSources: "({ clock, env, fetchImpl, pollMs }) -> runtime sources with existing source ids"
+        source_mode: "WEATHER_SOURCE_MODE=real uses real sources; demo uses demo; missing required credentials excludes affected optional source or creates controlled unavailable source without service crash"
+        docs: "Portainer variables listed exactly and no server secrets are placed in Vite/browser env"
+      architecture_review: "The slice is safe because it stays server-side, keeps existing API/frontend contracts, keeps Supabase fallback, and tests every external provider through mocked fetch fixtures. The only deploy surface is environment variables and compose wiring."
+      task_updates:
+        T003:
+          allowed_files:
+            - server/realtime/realSources.test.js
+            - server/realtime/server.test.js
+            - server/realtime/deploymentConfig.test.js
+          verify:
+            - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+          stop_if:
+            - "Need implementation changes before red evidence."
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T004:
+          allowed_files:
+            - server/realtime/realSources.js
+            - server/realtime/realSources.test.js
+            - server/realtime/server.js
+            - server/realtime/server.test.js
+            - server/realtime/deploymentConfig.test.js
+            - Dockerfile
+            - docker-compose.yml
+            - DEPLOY_DOCKER.md
+            - .env.example
+          verify:
+            - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+            - "npm test"
+            - "npx eslint server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+            - "npm run build"
+            - "docker compose config"
+            - "git diff --check"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "No prior red_test evidence exists."
+            - "Need DB migration, schema change, backfill, auth/RLS/permission, deploy, or rollback work outside allowed_files."
+            - "Need real external credentials or live external network calls for tests."
+            - "Verification fails twice without a clear bounded fix."
+          impact_assessment_ref: T001.receipt.impact_assessment
+        T005:
+          allowed_files:
+            - server/realtime/realSources.js
+            - server/realtime/realSources.test.js
+            - server/realtime/server.js
+            - server/realtime/server.test.js
+            - server/realtime/deploymentConfig.test.js
+            - Dockerfile
+            - docker-compose.yml
+            - DEPLOY_DOCKER.md
+            - .env.example
+            - "docs/goals/beacon-live-real-node-adapters/**"
+          verify:
+            - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+            - "npm test"
+            - "npx eslint server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+            - "npm run build"
+            - "docker compose config"
+            - "node server/realtime/server.js smoke on an ephemeral local port; fetch /api/health"
+            - "git diff --check"
+          stop_if:
+            - "Need files outside allowed_files."
+            - "No meaningful failing test can be written."
+            - "Need real external credentials or live external network calls for verification."
+            - "Verification fails twice without understood cause."
+          impact_assessment_ref: T001.receipt.impact_assessment
+  - id: T003
+    type: worker
+    worker_kind: red_test
+    assignee: Worker
+    status: done
+    objective: "Write the failing acceptance tests selected by Judge, without production implementation."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T002 approved acceptance contract"
+      - "T002 allowed_files and verify commands"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/realSources.test.js
+      - server/realtime/server.test.js
+      - server/realtime/deploymentConfig.test.js
+    verify:
+      - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+    stop_if:
+      - "Need implementation changes before red evidence."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+    receipt:
+      result: done
+      summary: "Added red tests for real Node adapters, server real-source mode, and Portainer credential documentation."
+      changed_files:
+        - server/realtime/realSources.test.js
+        - server/realtime/server.test.js
+        - server/realtime/deploymentConfig.test.js
+      red_evidence:
+        command: "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+        result: "failed as expected"
+        failure: "realSources.test.js cannot resolve ./realSources.js; server real-source mode still returns demo data because sourceMode/fetchImpl/env are ignored; deployment config lacks WEATHER_SOURCE_MODE, METEOFRANCE_KEY, WINDSUP_USER, and WINDSUP_PASS wiring/docs."
+      verify:
+        - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js exits 1 before implementation"
+      next_recommendation: "Implement server/realtime/realSources.js, wire createWeatherService sourceMode/env/fetchImpl, and update Portainer docs/env/compose."
+  - id: T004
+    type: worker
+    worker_kind: implementation
+    assignee: Worker
+    status: done
+    objective: "Implement the largest safe useful slice that makes the approved red tests pass."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T003 red test receipt"
+      - "T002 implementation boundaries"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/realSources.js
+      - server/realtime/realSources.test.js
+      - server/realtime/server.js
+      - server/realtime/server.test.js
+      - server/realtime/deploymentConfig.test.js
+      - Dockerfile
+      - docker-compose.yml
+      - DEPLOY_DOCKER.md
+      - .env.example
+    verify:
+      - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+      - "npm run build"
+      - "docker compose config"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "No prior red_test evidence exists."
+      - "Need DB migration, schema change, backfill, auth/RLS/permission, deploy, or rollback work outside allowed_files."
+      - "Need real external credentials or live external network calls for tests."
+      - "Verification fails twice without a clear bounded fix."
+    receipt:
+      result: done
+      summary: "Implemented real Node weather adapters with injectable fetch/env/clock, wired WEATHER_SOURCE_MODE into weather-api, and updated Portainer-facing env docs/config."
+      changed_files:
+        - server/realtime/realSources.js
+        - server/realtime/realSources.test.js
+        - server/realtime/server.js
+        - server/realtime/server.test.js
+        - server/realtime/deploymentConfig.test.js
+        - docker-compose.yml
+        - DEPLOY_DOCKER.md
+        - .env.example
+      green_test:
+        command: "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+        result: pass
+        details: "3 files, 10 tests passed"
+      verify:
+        - "npm test passed: 17 files, 161 tests"
+        - "npx eslint server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed and includes WEATHER_SOURCE_MODE=real plus credential vars"
+        - "Node smoke with WEATHER_SOURCE_MODE=demo returned /api/health 200 ok with 2 sources"
+        - "git diff --check passed"
+      next_recommendation: "Run T005 verification package, then final Judge/ship. Remaining owner action after push should be adding METEOFRANCE_KEY and optional WindsUp creds in Portainer."
+  - id: T005
+    type: worker
+    worker_kind: verification
+    assignee: Worker
+    status: done
+    objective: "Run the full verification package, including browser or visual checks when the acceptance contract requires them."
+    inputs:
+      - "architecture_review"
+      - "interface_contract"
+      - "module_map"
+      - "test_strategy"
+      - "feedback_policy"
+      - "ubiquitous_language"
+      - "design_concept"
+      - "T004 implementation receipt"
+      - "Approved feedback_policy"
+    impact_assessment_ref: T001.receipt.impact_assessment
+    allowed_files:
+      - server/realtime/realSources.js
+      - server/realtime/realSources.test.js
+      - server/realtime/server.js
+      - server/realtime/server.test.js
+      - server/realtime/deploymentConfig.test.js
+      - Dockerfile
+      - docker-compose.yml
+      - DEPLOY_DOCKER.md
+      - .env.example
+      - "docs/goals/beacon-live-real-node-adapters/**"
+    verify:
+      - "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+      - "npm test"
+      - "npx eslint server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+      - "npm run build"
+      - "docker compose config"
+      - "node server/realtime/server.js smoke on an ephemeral local port; fetch /api/health"
+      - "git diff --check"
+    stop_if:
+      - "Need DB migration, schema change, backfill, env/secret, auth/RLS/permission, external service, background job, deploy, or rollback work outside allowed_files."
+      - "Need files outside allowed_files."
+      - "No meaningful failing test can be written."
+      - "Need real external credentials or live external network calls for verification."
+      - "Verification fails twice without understood cause."
+    receipt:
+      result: done
+      summary: "Verified real Node adapter deploy-readiness package with fresh command output."
+      changed_files:
+        - server/realtime/realSources.js
+        - server/realtime/realSources.test.js
+        - server/realtime/server.js
+        - server/realtime/server.test.js
+        - server/realtime/deploymentConfig.test.js
+        - docker-compose.yml
+        - DEPLOY_DOCKER.md
+        - .env.example
+        - "docs/goals/beacon-live-real-node-adapters/**"
+      green_test:
+        command: "npm test -- server/realtime/realSources.test.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js"
+        result: pass
+        details: "3 files, 10 tests passed"
+      verify:
+        - "npm test passed: 17 files, 161 tests"
+        - "npx eslint server/realtime/realSources.js server/realtime/realSources.test.js server/realtime/server.js server/realtime/server.test.js server/realtime/deploymentConfig.test.js passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed and includes WEATHER_SOURCE_MODE=real, METEOFRANCE_KEY, WINDSUP_USER, WINDSUP_PASS, WUNDERGROUND_API_KEY"
+        - "Node smoke with WEATHER_SOURCE_MODE=demo returned /api/health status 200, serviceStatus ok, sourceCount 2"
+        - "git diff --check passed"
+      next_recommendation: "Approve, commit, push, and tell the owner the exact Portainer variables to add before Pull and redeploy."
+  - id: T006
+    type: judge
+    assignee: Judge
+    status: done
+    objective: "Review architecture, spec fidelity, and test evidence before shipping."
+    inputs:
+      - "T001 through T005 receipts"
+      - "Current diff"
+      - "Last verification output"
+    constraints:
+      - "Do not implement."
+      - "Reject completion if the implementation only satisfies internal tasks but not the original oracle."
+      - "Reject hidden design drift, shallow-module sprawl, or missing acceptance evidence."
+    expected_output:
+      - "approved | changes_required"
+      - "design_delta"
+      - "architecture_review"
+      - "oracle_coverage"
+      - "remaining risks"
+      - "whether another Worker slice is needed"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Real Node adapter slice approved for shipping. The branch is ready for Portainer redeploy once the listed server-side credentials are added."
+      design_delta: "weather-api can now run in WEATHER_SOURCE_MODE=real using Node adapters ported from the Supabase Edge Function, while WEATHER_SOURCE_MODE=demo remains available for no-secret smoke. The frontend still uses /api through Nginx and no server-side credentials are exposed to browser env vars."
+      architecture_review: "The adapter layer is server-only and injectable for tests. Credential-gated Météo-France and WindsUp sources are included only when env vars exist; public/compat sources remain available. createWeatherService wires source mode, env, and fetchImpl cleanly. Docker Compose and docs now list Portainer variables. Verification passed without real external network calls or credentials."
+      oracle_coverage:
+        real_node_adapters: true
+        credential_gating: true
+        demo_fallback: true
+        server_source_mode: true
+        api_contract_preserved: true
+        portainer_env_docs: true
+        tests_without_external_network: true
+        build_lint_smoke: true
+        pushed: false
+      remaining_risks:
+        - "Real upstream credentials were not available in this session, so live provider auth was not exercised against production APIs."
+        - "WindsUp remains optional and will be skipped unless WINDSUP_USER and WINDSUP_PASS are configured."
+      another_worker_slice_needed: false
+  - id: T998
+    type: pm
+    assignee: PM
+    status: done
+    objective: "Commit all goal-related changes and push the current branch once verification is green."
+    inputs:
+      - "Approved implementation and verification receipts"
+      - "Current git status"
+    constraints:
+      - "Do not include unrelated dirty files."
+      - "If the workspace is not a git repository, record shipping_blocker: no_git_repository."
+      - "If no GitHub remote exists, record shipping_blocker: no_github_remote."
+    expected_output:
+      - "Or shipping_blocker: no_git_repository | no_github_remote"
+      - "Unrelated dirty files left untouched"
+      - "Committed files"
+      - "Push result"
+      - "Remote branch"
+      - "Commit SHA"
+      - "commit_sha"
+      - "remote_branch or push string"
+      - "push_result"
+      - "committed_files"
+      - "unrelated_dirty_files_left_untouched"
+    receipt:
+      result: done
+      summary: "Committed and pushed real Node adapter deploy-readiness changes. Unrelated dirty files were left untouched."
+      commit_sha: b1dcef1ab0389a76818c3b0058b40606d58eb0c5
+      remote_branch: origin/codex/beacon-live-docker-realtime-product
+      push_result: "pushed to existing branch"
+      committed_files:
+        - server/realtime/realSources.js
+        - server/realtime/realSources.test.js
+        - server/realtime/server.js
+        - server/realtime/server.test.js
+        - server/realtime/deploymentConfig.test.js
+        - docker-compose.yml
+        - DEPLOY_DOCKER.md
+        - .env.example
+        - "docs/goals/beacon-live-real-node-adapters/**"
+      unrelated_dirty_files_left_untouched:
+        - .claude/
+        - docs/goals/beacon-live-realtime-docker-golden-state/.goalbuddy-board/
+      verify:
+        - "npm test passed: 17 files, 161 tests"
+        - "targeted eslint passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed"
+        - "Node demo smoke /api/health returned 200 ok"
+        - "git push passed"
+  - id: T999
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit whether the full original outcome is complete."
+    inputs:
+      - "design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, and design_delta evidence"
+      - "All done task receipts"
+      - "Last verification"
+      - "Current dirty diff"
+      - "Quality checker final output"
+      - "Completed impact_assessment receipt"
+      - "T998 shipping proof when shipping is required"
+    constraints:
+      - "Reject completion if design_concept, ubiquitous_language, feedback_policy, test_strategy, module_map, interface_contract, architecture_review, or design_delta evidence is missing when workflow_safeguards requires it."
+      - "Do not implement."
+      - "Reject completion if required Worker work is still queued or active."
+      - "Reject completion unless impact_assessment covers db_schema_migrations, data_backfill, env_secrets, auth_permissions, api_contract, ui_routes, background_jobs, external_services, deploy_rollback, observability, and docs when impact assessment is required."
+      - "For read-only audit goals with no Worker tasks and no changed_files, accept audit_scope/audit_findings/review/decision evidence instead of TDD, impact_assessment, T998, commit, and push."
+      - "For verification goals, reject completion unless safe test/browser command evidence exists and no changed_files are reported."
+      - "Reject completion unless T998 has a commit SHA and successful push result, or an explicit shipping_blocker for no_git_repository/no_github_remote, when shipping is required."
+    expected_output:
+      - "design_delta"
+      - "workflow_safeguards result"
+      - "complete | not_complete"
+      - "full_outcome_complete: true | false"
+      - "missing evidence"
+      - "next task if not complete"
+    receipt:
+      result: done
+      decision: approved
+      summary: "Final audit complete: the branch is ready for Portainer redeploy once credentials are added. Real Node adapters are implemented, demo fallback remains, /api contract is preserved, docs/env list exact variables, verification passed, and changes were pushed."
+      design_delta: "The Docker weather-api is no longer demo-only. It can run with WEATHER_SOURCE_MODE=real and server-side credentials for Météo-France and optional WindsUp, while WEATHER_SOURCE_MODE=demo remains available for no-secret smoke. No secret is exposed through Vite/browser env vars."
+      workflow_safeguards:
+        design_concept: true
+        ubiquitous_language: true
+        feedback_policy: true
+        test_strategy: true
+        module_map: true
+        interface_contract: true
+        architecture_review: true
+        design_delta: true
+        impact_assessment: true
+        shipping_proof: true
+      architecture_review: "Real adapters are isolated in server/realtime/realSources.js with injectable fetch/env/clock. Tests cover credential gating, parsing fixtures, server source-mode wiring, and Portainer config docs. Docker Compose defaults WEATHER_SOURCE_MODE to real and wires METEOFRANCE_KEY, WINDSUP_USER, WINDSUP_PASS, and optional WUNDERGROUND_API_KEY into weather-api only."
+      complete: complete
+      full_outcome_complete: true
+      missing_evidence:
+        []
+      portainer_variables_to_add:
+        - "VITE_WEATHER_BACKEND_URL=/api"
+        - "WEATHER_SOURCE_MODE=real"
+        - "WEATHER_POLL_MS=20000"
+        - "WEATHER_HEARTBEAT_MS=15000"
+        - "METEOFRANCE_KEY=<your key>"
+        - "WINDSUP_USER=<optional WindsUp login>"
+        - "WINDSUP_PASS=<optional WindsUp password>"
+        - "WUNDERGROUND_API_KEY=<optional override; can be blank>"
+      verify:
+        - "npm test passed: 17 files, 161 tests"
+        - "targeted eslint passed"
+        - "npm run build passed with existing Vite chunk-size warning"
+        - "docker compose config passed"
+        - "Node demo smoke /api/health returned 200 ok"
+        - "git push passed to origin/codex/beacon-live-docker-realtime-product"
+      shipping:
+        commits:
+          - b1dcef1
+          - 43e1685
+        remote_branch: origin/codex/beacon-live-docker-realtime-product
+        push_result: pushed

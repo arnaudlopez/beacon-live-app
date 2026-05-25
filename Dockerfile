@@ -16,16 +16,38 @@ COPY . .
 # Définir les variables d'environnement nécessaires au build de Vite (elles seront "cuites" dans le code HTML/JS)
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
+ARG VITE_WEATHER_BACKEND_URL
 
 ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
 ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
+ENV VITE_WEATHER_BACKEND_URL=$VITE_WEATHER_BACKEND_URL
 
 
 # Construire l'application pour la production (génère le dossier /dist)
 RUN npm run build
 
+# Étape API : backend realtime local sans secrets externes obligatoires
+FROM node:20-alpine AS weather-api
+
+WORKDIR /app
+
+ENV NODE_ENV=production
+ENV HOST=0.0.0.0
+ENV PORT=8787
+ENV WEATHER_STORE_PATH=/data/weather-state.json
+ENV WEATHER_POLL_MS=20000
+ENV WEATHER_HEARTBEAT_MS=15000
+
+COPY package*.json ./
+RUN npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps
+
+COPY server ./server
+
+EXPOSE 8787
+CMD ["node", "server/realtime/server.js"]
+
 # Étape 2 : Serveur web (Nginx) pour servir les fichiers statiques
-FROM nginx:alpine
+FROM nginx:alpine AS frontend
 
 # Copier la configuration Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
