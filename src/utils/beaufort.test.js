@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getBeaufort, degToCardinal } from './beaufort';
+import { getBeaufort, degToCardinal, windFromToFlowDirection } from './beaufort';
 
 // ──────────────────────────────────────────────
 // getBeaufort()
@@ -119,5 +119,19 @@ describe('degToCardinal', () => {
     for (let deg = 0; deg < 360; deg += 10) {
       expect(validDirs).toContain(degToCardinal(deg));
     }
+  });
+});
+
+describe('windFromToFlowDirection', () => {
+  it('turns weather source direction into map flow direction', () => {
+    expect(windFromToFlowDirection(220)).toBe(40);
+    expect(windFromToFlowDirection(0)).toBe(180);
+    expect(windFromToFlowDirection(350)).toBe(170);
+  });
+
+  it('returns null for missing or invalid directions', () => {
+    expect(windFromToFlowDirection(null)).toBeNull();
+    expect(windFromToFlowDirection(undefined)).toBeNull();
+    expect(windFromToFlowDirection('bad')).toBeNull();
   });
 });

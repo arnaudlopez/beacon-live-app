@@ -36,3 +36,14 @@ export function degToCardinal(deg) {
   const dirs = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   return dirs[Math.round(((deg % 360) + 360) % 360 / 22.5) % 16];
 }
+
+/**
+ * Weather wind direction is where wind comes from. Map arrows are read as flow,
+ * so they should point where the wind goes.
+ */
+export function windFromToFlowDirection(deg) {
+  if (deg === null || deg === undefined) return null;
+  const value = Number(deg);
+  if (!Number.isFinite(value)) return null;
+  return (((value + 180) % 360) + 360) % 360;
+}

@@ -3,6 +3,7 @@ import { Wind } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { windFromToFlowDirection } from '../utils/beaufort';
 
 function MapCenterUpdater({ center }) {
   const map = useMap();
@@ -52,6 +53,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
   if (!data) return null;
 
   const hasDirection = data.windDirection !== null && data.windDirection !== undefined;
+  const arrowDirection = windFromToFlowDirection(data.windDirection);
   const ageMs = getTimeSince(history);
   const level = getStaleLevel(ageMs);
   const ageLabel = formatAge(ageMs);
@@ -70,7 +72,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
       className: `custom-wind-icon ${active ? 'active-wind-marker' : ''} ${staleClass}`,
       html: `
         <div class="wind-marker-compact" style="cursor: pointer;">
-          ${hasDirection ? `<div class="wind-arrow-compact" style="transform: rotate(${data.windDirection}deg);">
+          ${hasDirection ? `<div class="wind-arrow-compact" style="transform: rotate(${arrowDirection}deg);">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
               <polygon points="12 2 19 21 12 17 5 21 12 2" fill="currentColor" opacity="0.8"/>
             </svg>
@@ -100,7 +102,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
     className: `custom-wind-icon ${active ? 'active-wind-marker' : ''} ${staleClass}`,
     html: `
       <div class="wind-marker-container" style="cursor: pointer;">
-        ${hasDirection ? `<div class="wind-arrow" style="transform: rotate(${data.windDirection}deg);">
+        ${hasDirection ? `<div class="wind-arrow" style="transform: rotate(${arrowDirection}deg);">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <polygon points="12 2 19 21 12 17 5 21 12 2" fill="currentColor" opacity="0.8"/>
           </svg>
