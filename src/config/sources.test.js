@@ -59,6 +59,15 @@ describe('SOURCES configuration', () => {
       expect(source.stationId.length).toBeGreaterThan(0);
     });
   });
+
+  it('includes Porto Polo as a WindsUp source', () => {
+    expect(SOURCES.find(source => source.id === 'porto_polo')).toMatchObject({
+      name: 'Porto Polo',
+      type: 'windsup',
+      stationId: '84',
+      coords: [41.7129, 8.81832],
+    });
+  });
 });
 
 describe('CANDHIS_STATIONS', () => {

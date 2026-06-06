@@ -39,6 +39,7 @@ describe('real weather source adapters', () => {
       'esurfmar_calvi',
       'windsup_porticcio',
       'windsup_tonnara',
+      'windsup_porto_polo',
       'windsup_piantarella',
       'windsup_santa_manza',
       'windsup_balistra',
@@ -65,6 +66,7 @@ describe('real weather source adapters', () => {
     expect(ids).not.toContain('meteofrance_20004003');
     expect(ids).not.toContain('windsup_porticcio');
     expect(ids).not.toContain('windsup_tonnara');
+    expect(ids).not.toContain('windsup_porto_polo');
     expect(ids).not.toContain('windsup_piantarella');
     expect(ids).not.toContain('windsup_santa_manza');
     expect(ids).not.toContain('windsup_balistra');

@@ -579,6 +579,7 @@ export function createRealWeatherSources({
     for (const [sourceId, spotId] of [
       ['windsup_porticcio', '1726'],
       ['windsup_tonnara', '51'],
+      ['windsup_porto_polo', '84'],
       ['windsup_piantarella', '1659'],
       ['windsup_santa_manza', '1549'],
       ['windsup_balistra', '1693'],

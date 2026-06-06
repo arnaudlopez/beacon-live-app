@@ -3,6 +3,7 @@ const WIND_SOURCE_MAP = {
   meteofrance_20004003: 'la_parata',
   windsup_porticcio: 'porticcio',
   windsup_tonnara: 'la_tonnara',
+  windsup_porto_polo: 'porto_polo',
   windsup_piantarella: 'piantarella',
   windsup_santa_manza: 'santa_manza',
   windsup_balistra: 'balistra',

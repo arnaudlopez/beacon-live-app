@@ -39,6 +39,7 @@ const WIND_SOURCE_MAP = {
   'tizzano': 'wunderground_ISARTN1',
   'bonifacio_tramizzi': 'wunderground_IBONIF6',
   'la_tonnara': 'windsup_tonnara',
+  'porto_polo': 'windsup_porto_polo',
   'piantarella': 'windsup_piantarella',
   'santa_manza': 'windsup_santa_manza',
   'balistra': 'windsup_balistra',
