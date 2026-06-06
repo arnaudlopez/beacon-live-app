@@ -268,34 +268,49 @@ export function parseESurfmarHtml(html) {
 export function parseWindsUpMobileHtml(html) {
   const avgRegex = /\{x:(\d{13}),y:(\d+),o:"([^"]*)",color:"[^"]*",img:"[^"]*",?\}/g;
   const gustRegex = /\{x:(\d{13}),low:(\d+),high:(\d+),?\}/g;
-  const degreeMatch = html.match(/class="deg"[^>]*>(\d{1,3})</);
-  const preciseDirection = degreeMatch ? Number.parseInt(degreeMatch[1], 10) : null;
-  const cardinalMap = {
-    N: 0,
-    NNE: 22,
-    NE: 45,
-    ENE: 67,
-    E: 90,
-    ESE: 112,
-    SE: 135,
-    SSE: 157,
-    S: 180,
-    SSO: 202,
-    SO: 225,
-    OSO: 247,
-    O: 270,
-    ONO: 292,
-    NO: 315,
-    NNO: 337,
-  };
+  const observationLineRegex = /<div\b[^>]*class=["'][^"']*\bspotObsLine\b[^"']*["'][^>]*>([\s\S]*?)(?=<div\b[^>]*class=["'][^"']*\bspotObsLine\b|$)/gi;
+  const parisTimeFormatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: 'Europe/Paris',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+
+  function normalizeHourMinute(value) {
+    const [hour, minute] = value.split(':');
+    return `${hour.padStart(2, '0')}:${minute}`;
+  }
+
+  function normalizeDegree(value) {
+    const degree = Number.parseInt(value, 10);
+    if (!Number.isFinite(degree) || degree < 0 || degree > 360) return null;
+    return degree;
+  }
+
+  function hourMinuteFromTimestamp(time) {
+    return normalizeHourMinute(parisTimeFormatter.format(new Date(time)));
+  }
+
+  const degreeByMinute = new Map();
+  let lineMatch;
+  while ((lineMatch = observationLineRegex.exec(html)) !== null) {
+    const block = lineMatch[1];
+    const text = block.replace(/<[^>]+>/g, ' ');
+    const timeMatch = text.match(/\b(\d{1,2}:\d{2})\b/);
+    const degreeMatch = block.match(/class=["'][^"']*\bdeg\b[^"']*["'][^>]*>\s*(\d{1,3})\s*</i);
+    if (timeMatch && degreeMatch) {
+      degreeByMinute.set(normalizeHourMinute(timeMatch[1]), normalizeDegree(degreeMatch[1]));
+    }
+  }
 
   const avgByTime = new Map();
   const gustByTime = new Map();
   let match;
   while ((match = avgRegex.exec(html)) !== null) {
+    const time = Number(match[1]);
     avgByTime.set(Number(match[1]), {
       avgSpeed: Number(match[2]),
-      windDirection: preciseDirection ?? cardinalMap[match[3]] ?? null,
+      windDirection: degreeByMinute.get(hourMinuteFromTimestamp(time)) ?? null,
     });
   }
   while ((match = gustRegex.exec(html)) !== null) {

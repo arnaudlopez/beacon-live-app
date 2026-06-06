@@ -190,6 +190,28 @@ describe('real weather source adapters', () => {
     });
   });
 
+  it('maps WindsUp directions from per-row degrees and ignores cardinal labels', () => {
+    const windsup = parseWindsUpMobileHtml(`
+      <div class="spotObsLine">
+        <span>11:51</span><span>17</span><span>17</span><span>18</span><span>O</span><div class="deg">250</div>
+      </div>
+      <div class="spotObsLine">
+        <span>11:53</span><span>14</span><span>16</span><span>17</span><span>O</span><div class="deg">261</div>
+      </div>
+      {x:1780739460000,y:17,o:"O",color:"#fff",img:""}
+      {x:1780739580000,y:16,o:"O",color:"#fff",img:""}
+      {x:1780739460000,low:17,high:18}
+      {x:1780739580000,low:14,high:17}
+    `);
+
+    expect(windsup.history.map((item) => item.windDirection)).toEqual([250, 261]);
+    expect(windsup.live).toMatchObject({
+      windSpeed: 16,
+      windGust: 17,
+      windDirection: 261,
+    });
+  });
+
   it('authenticates WindsUp through the current premium session flow', async () => {
     const fetchImpl = vi.fn()
       .mockResolvedValueOnce(new Response('', {
