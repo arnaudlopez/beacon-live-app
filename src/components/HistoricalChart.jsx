@@ -13,6 +13,7 @@ import {
 import { format } from 'date-fns';
 
 const TIME_WINDOW_KEY = 'beacon_time_window';
+const CHART_SYNC_ID = 'historical-weather-timeline';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (active && payload && payload.length) {
@@ -119,7 +120,12 @@ export default function HistoricalChart({ data }) {
 
       {/* Wind Speed & Temperature Chart */}
       <ResponsiveContainer width="100%" height={hasDirection ? 320 : 420} minWidth={0}>
-        <ComposedChart data={filteredData} margin={{ top: 10, right: 5, left: 5, bottom: 0 }}>
+        <ComposedChart
+          data={filteredData}
+          margin={{ top: 10, right: 5, left: 5, bottom: 0 }}
+          syncId={CHART_SYNC_ID}
+          syncMethod="value"
+        >
           <defs>
             <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
               <stop offset="5%" stopColor="#00e5ff" stopOpacity={0.45}/>
@@ -209,7 +215,12 @@ export default function HistoricalChart({ data }) {
         <>
           <h3 className="widget-title" style={{ margin: '0.8rem 0 0.3rem', fontSize: '0.8rem' }}>🧭 Direction du vent</h3>
           <ResponsiveContainer width="100%" height={200} minWidth={0}>
-            <ComposedChart data={filteredData} margin={{ top: 5, right: 5, left: 5, bottom: 0 }}>
+            <ComposedChart
+              data={filteredData}
+              margin={{ top: 5, right: 5, left: 5, bottom: 0 }}
+              syncId={CHART_SYNC_ID}
+              syncMethod="value"
+            >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis 
                 dataKey="time" 
