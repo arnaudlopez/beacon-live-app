@@ -35,6 +35,7 @@ describe('real weather source adapters', () => {
       'meteofrance_20093002',
       'meteofrance_20107001',
       'meteofrance_20342001',
+      'meteofrance_20041001',
       'pioupiou_1202',
       'candhis_revellata',
       'candhis_bonifacio',
@@ -73,6 +74,7 @@ describe('real weather source adapters', () => {
     expect(ids).not.toContain('meteofrance_20093002');
     expect(ids).not.toContain('meteofrance_20107001');
     expect(ids).not.toContain('meteofrance_20342001');
+    expect(ids).not.toContain('meteofrance_20041001');
     expect(ids).not.toContain('windsup_porticcio');
     expect(ids).not.toContain('windsup_tonnara');
     expect(ids).not.toContain('windsup_porto_polo');

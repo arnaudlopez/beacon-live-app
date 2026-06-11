@@ -83,9 +83,16 @@ describe('SOURCES configuration', () => {
       stationId: '1661',
       coords: [41.4655, 9.06925],
     });
+    expect(SOURCES.find(source => source.id === 'lfvh')).toMatchObject({
+      name: 'Cap Pertusato - LFVH',
+      type: 'meteofrance',
+      stationId: '20041001',
+      coords: [41.37, 9.18],
+    });
     expect(ids.indexOf('lfkf')).toBe(ids.indexOf('tizzano') + 1);
     expect(ids.indexOf('figari_eole')).toBe(ids.indexOf('lfkf') + 1);
-    expect(ids.indexOf('bonifacio_tramizzi')).toBe(ids.indexOf('figari_eole') + 1);
+    expect(ids.indexOf('lfvh')).toBe(ids.indexOf('figari_eole') + 1);
+    expect(ids.indexOf('bonifacio_tramizzi')).toBe(ids.indexOf('lfvh') + 1);
   });
 
   it('includes north and east Corsica Météo-France sources after the Calvi buoy', () => {

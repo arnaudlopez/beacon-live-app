@@ -15,6 +15,7 @@ export const SOURCES = [
   { id: 'tizzano', name: 'Tizzano', type: 'wunderground', stationId: 'ISARTN1', coords: [41.540, 8.852] },
   { id: 'lfkf', name: 'Figari - LFKF', type: 'meteofrance', stationId: '20114002', coords: [41.51, 9.10] },
   { id: 'figari_eole', name: 'Figari - Eole', type: 'windsup', stationId: '1661', coords: [41.4655, 9.06925] },
+  { id: 'lfvh', name: 'Cap Pertusato - LFVH', type: 'meteofrance', stationId: '20041001', coords: [41.37, 9.18] },
   { id: 'bonifacio_tramizzi', name: 'Bonifacio Tramizzi', type: 'wunderground', stationId: 'IBONIF6', coords: [41.403, 9.155] },
   { id: 'la_tonnara', name: 'La Tonnara', type: 'windsup', stationId: '51', coords: [41.4268, 9.10517] },
   { id: 'piantarella', name: 'Piantarella', type: 'windsup', stationId: '1659', coords: [41.3756, 9.22097] },
