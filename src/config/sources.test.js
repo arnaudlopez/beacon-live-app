@@ -87,6 +87,17 @@ describe('SOURCES configuration', () => {
     expect(ids.indexOf('figari_eole')).toBe(ids.indexOf('lfkf') + 1);
     expect(ids.indexOf('bonifacio_tramizzi')).toBe(ids.indexOf('figari_eole') + 1);
   });
+
+  it('includes Ile Rousse Météo-France after the Calvi buoy', () => {
+    const ids = SOURCES.map(source => source.id);
+    expect(SOURCES.find(source => source.id === 'lfvf')).toMatchObject({
+      name: 'Ile Rousse - LFVF',
+      type: 'meteofrance',
+      stationId: '20093002',
+      coords: [42.6333, 8.9225],
+    });
+    expect(ids.indexOf('lfvf')).toBe(ids.indexOf('calvi_buoy') + 1);
+  });
 });
 
 describe('CANDHIS_STATIONS', () => {

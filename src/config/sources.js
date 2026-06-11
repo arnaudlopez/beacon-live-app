@@ -22,6 +22,7 @@ export const SOURCES = [
   { id: 'balistra', name: 'Balistra', type: 'windsup', stationId: '1693', coords: [41.4379, 9.22215] },
   { id: 'ajaccio_buoy', name: "Bouée Golfe d'Ajaccio", type: 'esurfmar', stationId: 'ajaccio', coords: [41.750, 7.580] },
   { id: 'calvi_buoy', name: 'Bouée Calvi', type: 'esurfmar', stationId: 'calvi', coords: [42.583, 8.700] },
+  { id: 'lfvf', name: 'Ile Rousse - LFVF', type: 'meteofrance', stationId: '20093002', coords: [42.6333, 8.9225] },
   { id: 'owm-1202', name: 'San Bastianu (OWM)', type: 'owm', pioupiouId: '1202', coords: [42.164, 8.618] }
 ];
 

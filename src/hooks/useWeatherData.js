@@ -33,6 +33,7 @@ const WIND_SOURCE_MAP = {
   'lfkj': 'meteofrance_20004002',
   'la_parata': 'meteofrance_20004003',
   'lfkf': 'meteofrance_20114002',
+  'lfvf': 'meteofrance_20093002',
   'porticcio': 'windsup_porticcio',
   'porticcio_haut': 'wunderground_IGROSS105',
   'mezzavia': 'wunderground_ISARROLA7',
