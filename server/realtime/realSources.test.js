@@ -31,6 +31,7 @@ describe('real weather source adapters', () => {
     expect(sources.map((source) => source.id)).toEqual(expect.arrayContaining([
       'meteofrance_20004002',
       'meteofrance_20004003',
+      'meteofrance_20114002',
       'pioupiou_1202',
       'candhis_revellata',
       'candhis_bonifacio',
@@ -65,6 +66,7 @@ describe('real weather source adapters', () => {
 
     expect(ids).not.toContain('meteofrance_20004002');
     expect(ids).not.toContain('meteofrance_20004003');
+    expect(ids).not.toContain('meteofrance_20114002');
     expect(ids).not.toContain('windsup_porticcio');
     expect(ids).not.toContain('windsup_tonnara');
     expect(ids).not.toContain('windsup_porto_polo');

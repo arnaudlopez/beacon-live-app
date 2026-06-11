@@ -1,6 +1,7 @@
 const WIND_SOURCE_MAP = {
   meteofrance_20004002: 'lfkj',
   meteofrance_20004003: 'la_parata',
+  meteofrance_20114002: 'lfkf',
   windsup_porticcio: 'porticcio',
   windsup_tonnara: 'la_tonnara',
   windsup_porto_polo: 'porto_polo',

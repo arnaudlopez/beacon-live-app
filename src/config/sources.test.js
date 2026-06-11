@@ -69,15 +69,22 @@ describe('SOURCES configuration', () => {
     });
   });
 
-  it('includes Figari Eole as a WindsUp source between Tizzano and Bonifacio', () => {
+  it('includes Figari Météo-France and WindsUp sources between Tizzano and Bonifacio', () => {
     const ids = SOURCES.map(source => source.id);
+    expect(SOURCES.find(source => source.id === 'lfkf')).toMatchObject({
+      name: 'Figari - LFKF',
+      type: 'meteofrance',
+      stationId: '20114002',
+      coords: [41.51, 9.10],
+    });
     expect(SOURCES.find(source => source.id === 'figari_eole')).toMatchObject({
       name: 'Figari - Eole',
       type: 'windsup',
       stationId: '1661',
       coords: [41.4655, 9.06925],
     });
-    expect(ids.indexOf('figari_eole')).toBe(ids.indexOf('tizzano') + 1);
+    expect(ids.indexOf('lfkf')).toBe(ids.indexOf('tizzano') + 1);
+    expect(ids.indexOf('figari_eole')).toBe(ids.indexOf('lfkf') + 1);
     expect(ids.indexOf('bonifacio_tramizzi')).toBe(ids.indexOf('figari_eole') + 1);
   });
 });
