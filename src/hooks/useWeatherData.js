@@ -35,6 +35,7 @@ const WIND_SOURCE_MAP = {
   'lfkf': 'meteofrance_20114002',
   'lfvf': 'meteofrance_20093002',
   'cap_corse': 'meteofrance_20107001',
+  'lfks': 'meteofrance_20342001',
   'porticcio': 'windsup_porticcio',
   'porticcio_haut': 'wunderground_IGROSS105',
   'mezzavia': 'wunderground_ISARROLA7',

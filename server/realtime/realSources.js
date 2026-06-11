@@ -552,6 +552,13 @@ export function createRealWeatherSources({
         fetchImpl,
         clock,
       })),
+      makeSource('meteofrance_20342001', defaultPollMs, () => fetchMeteoFrance({
+        stationId: '20342001',
+        sourceId: 'meteofrance_20342001',
+        key: env.METEOFRANCE_KEY,
+        fetchImpl,
+        clock,
+      })),
     );
   }
 

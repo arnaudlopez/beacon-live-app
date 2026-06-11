@@ -24,6 +24,7 @@ export const SOURCES = [
   { id: 'calvi_buoy', name: 'Bouée Calvi', type: 'esurfmar', stationId: 'calvi', coords: [42.583, 8.700] },
   { id: 'lfvf', name: 'Ile Rousse - LFVF', type: 'meteofrance', stationId: '20093002', coords: [42.6333, 8.9225] },
   { id: 'cap_corse', name: 'Cap Corse', type: 'meteofrance', stationId: '20107001', coords: [43.0038, 9.3595] },
+  { id: 'lfks', name: 'Solenzara - LFKS', type: 'meteofrance', stationId: '20342001', coords: [41.9167, 9.4] },
   { id: 'owm-1202', name: 'San Bastianu (OWM)', type: 'owm', pioupiouId: '1202', coords: [42.164, 8.618] }
 ];
 

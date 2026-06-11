@@ -4,6 +4,7 @@ const WIND_SOURCE_MAP = {
   meteofrance_20114002: 'lfkf',
   meteofrance_20093002: 'lfvf',
   meteofrance_20107001: 'cap_corse',
+  meteofrance_20342001: 'lfks',
   windsup_porticcio: 'porticcio',
   windsup_tonnara: 'la_tonnara',
   windsup_porto_polo: 'porto_polo',

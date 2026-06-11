@@ -152,6 +152,11 @@ describe('weather runtime realtime contract', () => {
         fetch: vi.fn().mockResolvedValue(reading('meteofrance_20107001', '2026-05-25T08:00:00.000Z', 15)),
       },
       {
+        id: 'meteofrance_20342001',
+        pollMs: 60_000,
+        fetch: vi.fn().mockResolvedValue(reading('meteofrance_20342001', '2026-05-25T08:00:00.000Z', 10)),
+      },
+      {
         id: 'candhis_revellata',
         pollMs: 20_000,
         fetch: vi.fn().mockResolvedValue({
@@ -212,6 +217,7 @@ describe('weather runtime realtime contract', () => {
     expect(snapshot.windData.lfkf.live.windSpeed).toBe(8);
     expect(snapshot.windData.lfvf.live.windSpeed).toBe(7);
     expect(snapshot.windData.cap_corse.live.windSpeed).toBe(15);
+    expect(snapshot.windData.lfks.live.windSpeed).toBe(10);
     expect(snapshot.windData.ajaccio_buoy.live.windSpeed).toBe(12);
     expect(snapshot.surfData.ajaccio.height).toBe(1.2);
     expect(snapshot.surfData.revellata).toMatchObject({
