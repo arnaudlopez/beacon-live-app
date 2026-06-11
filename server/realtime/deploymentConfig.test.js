@@ -31,6 +31,7 @@ describe('realtime Docker deployment config', () => {
     expect(compose).toContain('max-file: "3"');
     expect(compose).toContain('weather-data:');
     expect(compose).toContain('VITE_WEATHER_BACKEND_URL=${VITE_WEATHER_BACKEND_URL:-/api}');
+    expect(compose).toContain("memory: 256M");
   });
 
   it('proxies /api requests and SSE streams from Nginx to the weather service', async () => {
