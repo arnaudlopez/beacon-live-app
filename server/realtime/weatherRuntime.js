@@ -7,6 +7,7 @@ const WIND_SOURCE_MAP = {
   windsup_piantarella: 'piantarella',
   windsup_santa_manza: 'santa_manza',
   windsup_balistra: 'balistra',
+  windsup_figari_eole: 'figari_eole',
   wunderground_IGROSS105: 'porticcio_haut',
   wunderground_ISARROLA7: 'mezzavia',
   wunderground_ICORSEPR2: 'propriano',

@@ -43,6 +43,7 @@ const WIND_SOURCE_MAP = {
   'piantarella': 'windsup_piantarella',
   'santa_manza': 'windsup_santa_manza',
   'balistra': 'windsup_balistra',
+  'figari_eole': 'windsup_figari_eole',
   'ajaccio_buoy': 'esurfmar_ajaccio',
   'calvi_buoy': 'esurfmar_calvi',
   'owm-1202': 'pioupiou_1202'

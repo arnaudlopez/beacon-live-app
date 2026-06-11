@@ -598,6 +598,7 @@ export function createRealWeatherSources({
       ['windsup_piantarella', '1659'],
       ['windsup_santa_manza', '1549'],
       ['windsup_balistra', '1693'],
+      ['windsup_figari_eole', '1661'],
     ]) {
       sources.push(makeSource(sourceId, fastPollMs, () => fetchWindsUp({
         sourceId,

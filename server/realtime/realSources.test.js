@@ -43,6 +43,7 @@ describe('real weather source adapters', () => {
       'windsup_piantarella',
       'windsup_santa_manza',
       'windsup_balistra',
+      'windsup_figari_eole',
       'wunderground_IGROSS105',
       'wunderground_ISARROLA7',
       'wunderground_ICORSEPR2',
@@ -70,6 +71,7 @@ describe('real weather source adapters', () => {
     expect(ids).not.toContain('windsup_piantarella');
     expect(ids).not.toContain('windsup_santa_manza');
     expect(ids).not.toContain('windsup_balistra');
+    expect(ids).not.toContain('windsup_figari_eole');
     expect(ids).toEqual(expect.arrayContaining([
       'pioupiou_1202',
       'candhis_revellata',

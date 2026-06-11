@@ -13,6 +13,7 @@ export const SOURCES = [
   { id: 'propriano', name: 'Propriano', type: 'wunderground', stationId: 'ICORSEPR2', coords: [41.674, 8.899] },
   { id: 'porto_polo', name: 'Porto Polo', type: 'windsup', stationId: '84', coords: [41.7129, 8.81832] },
   { id: 'tizzano', name: 'Tizzano', type: 'wunderground', stationId: 'ISARTN1', coords: [41.540, 8.852] },
+  { id: 'figari_eole', name: 'Figari - Eole', type: 'windsup', stationId: '1661', coords: [41.4655, 9.06925] },
   { id: 'bonifacio_tramizzi', name: 'Bonifacio Tramizzi', type: 'wunderground', stationId: 'IBONIF6', coords: [41.403, 9.155] },
   { id: 'la_tonnara', name: 'La Tonnara', type: 'windsup', stationId: '51', coords: [41.4268, 9.10517] },
   { id: 'piantarella', name: 'Piantarella', type: 'windsup', stationId: '1659', coords: [41.3756, 9.22097] },
