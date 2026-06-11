@@ -39,9 +39,9 @@ describe('SOURCES configuration', () => {
   it('all coordinates are in Corsica/Mediterranean area', () => {
     SOURCES.forEach(source => {
       const [lat, lon] = source.coords;
-      // Corsica: roughly lat 41-43, lon 7-10
+      // Corsica and nearby offshore buoys: roughly lat 41-43.1, lon 7-10
       expect(lat).toBeGreaterThanOrEqual(41);
-      expect(lat).toBeLessThanOrEqual(43);
+      expect(lat).toBeLessThanOrEqual(43.1);
       expect(lon).toBeGreaterThanOrEqual(7);
       expect(lon).toBeLessThanOrEqual(10);
     });
@@ -88,7 +88,7 @@ describe('SOURCES configuration', () => {
     expect(ids.indexOf('bonifacio_tramizzi')).toBe(ids.indexOf('figari_eole') + 1);
   });
 
-  it('includes Ile Rousse Météo-France after the Calvi buoy', () => {
+  it('includes north Corsica Météo-France sources after the Calvi buoy', () => {
     const ids = SOURCES.map(source => source.id);
     expect(SOURCES.find(source => source.id === 'lfvf')).toMatchObject({
       name: 'Ile Rousse - LFVF',
@@ -96,7 +96,14 @@ describe('SOURCES configuration', () => {
       stationId: '20093002',
       coords: [42.6333, 8.9225],
     });
+    expect(SOURCES.find(source => source.id === 'cap_corse')).toMatchObject({
+      name: 'Cap Corse',
+      type: 'meteofrance',
+      stationId: '20107001',
+      coords: [43.0038, 9.3595],
+    });
     expect(ids.indexOf('lfvf')).toBe(ids.indexOf('calvi_buoy') + 1);
+    expect(ids.indexOf('cap_corse')).toBe(ids.indexOf('lfvf') + 1);
   });
 });
 
