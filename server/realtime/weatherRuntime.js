@@ -27,6 +27,8 @@ const ESURFMAR_SOURCE_MAP = {
   esurfmar_ajaccio: 'ajaccio',
 };
 
+const DEFAULT_HISTORY_RETENTION_MS = 48 * 60 * 60 * 1000;
+
 function stableStringify(value) {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
@@ -43,6 +45,62 @@ function clone(value) {
 function toTimestamp(value) {
   const time = new Date(value).getTime();
   return Number.isFinite(time) ? time : null;
+}
+
+function normalizeHistoryPoint(point) {
+  const time = toTimestamp(point?.time);
+  if (time === null) return null;
+
+  return {
+    time,
+    avgSpeed: point.avgSpeed ?? null,
+    maxGust: point.maxGust ?? null,
+    temperature: point.temperature ?? null,
+    windDirection: point.windDirection ?? null,
+    ...(point.waterTemp !== undefined ? { waterTemp: point.waterTemp } : {}),
+  };
+}
+
+function historyPointFromLive(payload, observedAt) {
+  if (!payload?.live) return null;
+  const time = toTimestamp(observedAt);
+  if (time === null) return null;
+
+  return {
+    time,
+    avgSpeed: payload.live.windSpeed ?? null,
+    maxGust: payload.live.windGust ?? payload.live.windSpeed ?? null,
+    temperature: payload.live.temperature ?? null,
+    windDirection: payload.live.windDirection ?? null,
+  };
+}
+
+function mergeHistoryPoints({ previousHistory, nextHistory, livePoint, now, retentionMs }) {
+  const cutoff = now - retentionMs;
+  const byTime = new Map();
+
+  for (const point of [...(previousHistory ?? []), ...(nextHistory ?? []), livePoint].filter(Boolean)) {
+    const normalized = normalizeHistoryPoint(point);
+    if (!normalized || normalized.time < cutoff) continue;
+    byTime.set(normalized.time, normalized);
+  }
+
+  return Array.from(byTime.values()).sort((a, b) => a.time - b.time);
+}
+
+function mergeWindPayloadHistory({ previousPayload, nextPayload, observedAt, now, retentionMs }) {
+  const payload = clone(nextPayload);
+  if (!payload || typeof payload !== 'object') return payload;
+
+  payload.history = mergeHistoryPoints({
+    previousHistory: previousPayload?.history,
+    nextHistory: payload.history,
+    livePoint: historyPointFromLive(payload, observedAt),
+    now,
+    retentionMs,
+  });
+
+  return payload;
 }
 
 function createInitialSourceState() {
@@ -63,7 +121,13 @@ function createSnapshot(clock, initialSnapshot) {
   };
 }
 
-export function createWeatherRuntime({ clock, sources, initialSnapshot, store }) {
+export function createWeatherRuntime({
+  clock,
+  sources,
+  initialSnapshot,
+  store,
+  historyRetentionMs = DEFAULT_HISTORY_RETENTION_MS,
+}) {
   if (!clock || typeof clock.now !== 'function') {
     throw new Error('createWeatherRuntime requires a clock with now()');
   }
@@ -165,12 +229,18 @@ export function createWeatherRuntime({ clock, sources, initialSnapshot, store })
     return true;
   }
 
-  function mergeESurfmarPayload(sourceId, payload) {
+  function mergeESurfmarPayload(sourceId, payload, observedAt) {
     const windSourceId = WIND_SOURCE_MAP[sourceId];
     const surfSpotId = ESURFMAR_SOURCE_MAP[sourceId];
 
     if (windSourceId && payload?.live) {
-      snapshot.windData[windSourceId] = clone(payload);
+      snapshot.windData[windSourceId] = mergeWindPayloadHistory({
+        previousPayload: snapshot.windData[windSourceId],
+        nextPayload: payload,
+        observedAt,
+        now: clock.now(),
+        retentionMs: historyRetentionMs,
+      });
     }
 
     if (surfSpotId) {
@@ -180,12 +250,18 @@ export function createWeatherRuntime({ clock, sources, initialSnapshot, store })
     return Boolean(windSourceId || surfSpotId);
   }
 
-  function mergePayload(sourceId, payload) {
+  function mergePayload(sourceId, payload, observedAt) {
     if (CANDHIS_SOURCE_MAP[sourceId]) return mergeCandhisPayload(sourceId, payload);
-    if (sourceId.startsWith('esurfmar_')) return mergeESurfmarPayload(sourceId, payload);
+    if (sourceId.startsWith('esurfmar_')) return mergeESurfmarPayload(sourceId, payload, observedAt);
 
     const appSourceId = WIND_SOURCE_MAP[sourceId] || sourceId;
-    snapshot.windData[appSourceId] = clone(payload);
+    snapshot.windData[appSourceId] = mergeWindPayloadHistory({
+      previousPayload: snapshot.windData[appSourceId],
+      nextPayload: payload,
+      observedAt,
+      now: clock.now(),
+      retentionMs: historyRetentionMs,
+    });
     return true;
   }
 
@@ -195,7 +271,7 @@ export function createWeatherRuntime({ clock, sources, initialSnapshot, store })
     const changed = hash !== sourceState.hash;
 
     if (changed) {
-      mergePayload(sourceId, payload);
+      mergePayload(sourceId, payload, reading?.observedAt);
       sourceState.hash = hash;
     }
 

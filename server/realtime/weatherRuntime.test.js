@@ -203,6 +203,126 @@ describe('weather runtime realtime contract', () => {
     expect(snapshot.windData.candhis_alistro).toBeUndefined();
   });
 
+  it('extends short upstream wind histories with the retained snapshot history', async () => {
+    const clock = makeClock('2026-05-27T08:00:00.000Z');
+    const initialSnapshot = {
+      ts: '2026-05-27T07:59:40.000Z',
+      windData: {
+        porticcio: {
+          live: {
+            windSpeed: 10,
+            windGust: 14,
+            windDirection: 270,
+          },
+          history: [
+            {
+              time: '2026-05-25T08:00:00.000Z',
+              avgSpeed: 8,
+              maxGust: 12,
+              windDirection: 260,
+            },
+            {
+              time: '2026-05-27T06:00:00.000Z',
+              avgSpeed: 10,
+              maxGust: 14,
+              windDirection: 270,
+            },
+          ],
+        },
+      },
+      surfData: {},
+      waterData: null,
+      sourceHealth: {},
+    };
+    const source = {
+      id: 'windsup_porticcio',
+      pollMs: 20_000,
+      fetch: vi.fn().mockResolvedValue({
+        source: 'windsup_porticcio',
+        observedAt: '2026-05-27T08:00:00.000Z',
+        payload: {
+          live: {
+            windSpeed: 16,
+            windGust: 20,
+            windDirection: 250,
+          },
+          history: [
+            {
+              time: '2026-05-27T07:50:00.000Z',
+              avgSpeed: 15,
+              maxGust: 18,
+              windDirection: 252,
+            },
+            {
+              time: '2026-05-27T08:00:00.000Z',
+              avgSpeed: 16,
+              maxGust: 20,
+              windDirection: 250,
+            },
+          ],
+        },
+      }),
+    };
+    const runtime = createWeatherRuntime({
+      clock,
+      sources: [source],
+      initialSnapshot,
+    });
+
+    await runtime.pollDueSources();
+
+    const history = runtime.getSnapshot().windData.porticcio.history;
+    expect(history.map((point) => point.avgSpeed)).toEqual([8, 10, 15, 16]);
+    expect(history.map((point) => point.windDirection)).toEqual([260, 270, 252, 250]);
+  });
+
+  it('bounds retained wind history to the runtime retention window', async () => {
+    const clock = makeClock('2026-05-27T08:00:00.000Z');
+    const runtime = createWeatherRuntime({
+      clock,
+      historyRetentionMs: 60 * 60 * 1000,
+      initialSnapshot: {
+        ts: '2026-05-27T07:59:40.000Z',
+        windData: {
+          porticcio: {
+            live: {
+              windSpeed: 9,
+              windGust: 12,
+              windDirection: 270,
+            },
+            history: [
+              {
+                time: '2026-05-27T06:30:00.000Z',
+                avgSpeed: 7,
+                maxGust: 11,
+                windDirection: 260,
+              },
+              {
+                time: '2026-05-27T07:30:00.000Z',
+                avgSpeed: 9,
+                maxGust: 12,
+                windDirection: 270,
+              },
+            ],
+          },
+        },
+        surfData: {},
+        waterData: null,
+        sourceHealth: {},
+      },
+      sources: [{
+        id: 'windsup_porticcio',
+        pollMs: 20_000,
+        fetch: vi.fn().mockResolvedValue(reading('windsup_porticcio', '2026-05-27T08:00:00.000Z', 12)),
+      }],
+    });
+
+    await runtime.pollDueSources();
+
+    const history = runtime.getSnapshot().windData.porticcio.history;
+    expect(history.map((point) => point.avgSpeed)).toEqual([9, 12]);
+  });
+
   it('restores an initial snapshot and records persisted observations during polling', async () => {
     const clock = makeClock();
     const initialSnapshot = {
