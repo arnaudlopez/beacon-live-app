@@ -24,7 +24,32 @@ function normalizeMaxObservations(value) {
 
 function trimObservations(observations, maxObservations) {
   if (!Array.isArray(observations)) return [];
-  return observations.slice(-maxObservations);
+  return observations.slice(-maxObservations).map(compactObservation);
+}
+
+function compactPayload(payload) {
+  if (payload === null || typeof payload !== 'object') return payload;
+  if (Array.isArray(payload)) return payload;
+
+  const compact = {};
+  if (payload.live !== undefined) compact.live = clone(payload.live);
+  if (payload.surf !== undefined) compact.surf = clone(payload.surf);
+  if (payload.waterTemp !== undefined) compact.waterTemp = payload.waterTemp;
+  if (payload.height !== undefined) compact.height = payload.height;
+  if (payload.hmax !== undefined) compact.hmax = payload.hmax;
+  if (payload.period !== undefined) compact.period = payload.period;
+  if (payload.direction !== undefined) compact.direction = payload.direction;
+  if (payload.spread !== undefined) compact.spread = payload.spread;
+
+  return Object.keys(compact).length > 0 ? compact : clone(payload);
+}
+
+function compactObservation(observation) {
+  if (observation === null || typeof observation !== 'object') return observation;
+  return {
+    ...clone(observation),
+    payload: compactPayload(observation.payload),
+  };
 }
 
 function normalizeState(value, maxObservations = DEFAULT_MAX_OBSERVATIONS) {

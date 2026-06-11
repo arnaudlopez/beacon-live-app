@@ -304,13 +304,15 @@ export function createWeatherRuntime({
         lastErrorMessage: null,
         nextPollAt: new Date(sourceState.nextPollAt).toISOString(),
       });
-      await persistObservation({
-        sourceId: source.id,
-        observedAt: result.observedAt,
-        receivedAt,
-        changed: result.changed,
-        payload: reading?.payload ?? reading,
-      });
+      if (result.changed) {
+        await persistObservation({
+          sourceId: source.id,
+          observedAt: result.observedAt,
+          receivedAt,
+          changed: true,
+          payload: reading?.payload ?? reading,
+        });
+      }
       return result.changed
         ? {
             sourceId: source.id,

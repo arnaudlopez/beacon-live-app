@@ -65,7 +65,9 @@ describe('file weather store contract', () => {
         observedAt: '2026-05-25T08:00:20.000Z',
         receivedAt: '2026-05-25T08:00:21.000Z',
         changed: true,
-        payload: snapshot.windData.porticcio,
+        payload: {
+          live: snapshot.windData.porticcio.live,
+        },
       },
     ]);
   });
