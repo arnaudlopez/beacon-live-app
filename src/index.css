@@ -645,6 +645,38 @@ body::before {
   flex-direction: column;
 }
 
+.historical-sync-readout {
+  min-height: 2rem;
+  margin: -0.7rem 0 0.55rem;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.8rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  pointer-events: none;
+}
+
+.historical-sync-readout.active {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.historical-sync-readout span {
+  padding: 0.18rem 0.48rem;
+  border-radius: 0.65rem;
+  background: rgba(15, 23, 42, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  white-space: nowrap;
+}
+
+.historical-sync-time {
+  color: var(--text-secondary);
+}
+
 /* === ALERT BAR === */
 .alert-bar {
   display: flex;

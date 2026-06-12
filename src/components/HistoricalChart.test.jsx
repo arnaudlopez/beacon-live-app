@@ -9,8 +9,15 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }) => <div>{children}</div>,
-  ComposedChart: ({ syncId, syncMethod }) => (
-    <div data-sync-id={syncId || ''} data-sync-method={syncMethod || ''} />
+  ComposedChart: ({ children, syncId, syncMethod, onMouseMove, onMouseLeave }) => (
+    <svg
+      data-sync-id={syncId || ''}
+      data-sync-method={syncMethod || ''}
+      onMouseMove={() => onMouseMove?.({ activeTooltipIndex: 1 })}
+      onMouseLeave={() => onMouseLeave?.()}
+    >
+      {children}
+    </svg>
   ),
   Area: () => null,
   Line: () => null,
@@ -19,6 +26,7 @@ vi.mock('recharts', () => ({
   YAxis: () => null,
   CartesianGrid: () => null,
   Tooltip: () => null,
+  ReferenceLine: ({ x, yAxisId }) => <line data-testid="reference-line" data-x={x} data-axis={yAxisId} />,
 }));
 
 describe('HistoricalChart', () => {
@@ -69,6 +77,23 @@ describe('HistoricalChart', () => {
     const charts = [...container.querySelectorAll('[data-sync-id="historical-weather-timeline"]')];
     expect(charts).toHaveLength(2);
     expect(charts.every((chart) => chart.dataset.syncMethod === 'value')).toBe(true);
+
+    expect(container.textContent).not.toContain('Direction: 260°');
+
+    act(() => {
+      charts[0].dispatchEvent(new MouseEvent('mousemove', { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain('Vent moyen: 14 kts');
+    expect(container.textContent).toContain('Rafale: 18 kts');
+    expect(container.textContent).toContain('Direction: 260°');
+    expect(container.querySelectorAll('[data-testid="reference-line"]')).toHaveLength(2);
+
+    act(() => {
+      charts[0].dispatchEvent(new MouseEvent('mouseout', { bubbles: true }));
+    });
+
+    expect(container.textContent).not.toContain('Direction: 260°');
 
     act(() => {
       root.unmount();

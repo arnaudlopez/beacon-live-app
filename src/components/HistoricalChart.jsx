@@ -8,7 +8,8 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  ResponsiveContainer
+  ResponsiveContainer,
+  ReferenceLine
 } from 'recharts';
 import { format } from 'date-fns';
 
@@ -66,6 +67,22 @@ const DirectionDot = (props) => {
 const cardinalTicks = [0, 90, 180, 270, 360];
 const cardinalLabels = { 0: 'N', 90: 'E', 180: 'S', 270: 'W', 360: 'N' };
 
+const formatChartValue = (value, unit = '') => {
+  if (value === null || value === undefined || value === '') return '—';
+  const numberValue = Number(value);
+  const formattedValue = Number.isFinite(numberValue)
+    ? numberValue.toFixed(1).replace(/\.0$/, '')
+    : value;
+  return `${formattedValue}${unit}`;
+};
+
+const formatDirection = (value) => {
+  if (value === null || value === undefined || value === '') return '—';
+  const numberValue = Number(value);
+  if (!Number.isFinite(numberValue)) return `${value}°`;
+  return `${Math.round(numberValue)}°`;
+};
+
 export default function HistoricalChart({ data }) {
   const [timeWindow, setTimeWindow] = useState(() => {
     try {
@@ -73,6 +90,7 @@ export default function HistoricalChart({ data }) {
       return saved ? JSON.parse(saved) : 6;
     } catch { return 6; }
   });
+  const [activeIndex, setActiveIndex] = useState(null);
 
   useEffect(() => {
     localStorage.setItem(TIME_WINDOW_KEY, JSON.stringify(timeWindow));
@@ -85,6 +103,18 @@ export default function HistoricalChart({ data }) {
   
   const filteredData = data.filter(d => new Date(d.time) >= cutoffDate);
   const hasDirection = filteredData.some(d => d.windDirection !== null && d.windDirection !== undefined);
+  const activePoint = Number.isInteger(activeIndex) && filteredData[activeIndex] ? filteredData[activeIndex] : null;
+  const hasActiveDirection = activePoint?.windDirection !== null && activePoint?.windDirection !== undefined;
+
+  const handleChartMouseMove = (state) => {
+    if (state && Number.isInteger(state.activeTooltipIndex)) {
+      setActiveIndex(state.activeTooltipIndex);
+    }
+  };
+
+  const handleChartMouseLeave = () => {
+    setActiveIndex(null);
+  };
 
   const formatXAxis = (tickItem) => {
     const date = new Date(tickItem);
@@ -99,7 +129,7 @@ export default function HistoricalChart({ data }) {
   ];
 
   return (
-    <div className="glass-panel historical-chart-container" style={{ height: hasDirection ? '620px' : '480px' }}>
+    <div className="glass-panel historical-chart-container" style={{ height: hasDirection ? '660px' : '500px' }}>
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h3 className="widget-title" style={{ margin: 0 }}>📈 Historique Vent & Météo</h3>
@@ -118,13 +148,34 @@ export default function HistoricalChart({ data }) {
         </div>
       </div>
 
+      <div className={`historical-sync-readout ${activePoint ? 'active' : ''}`} aria-live="polite">
+        {activePoint && (
+          <>
+            <span className="historical-sync-time">{format(new Date(activePoint.time), 'MMM dd, HH:mm')}</span>
+            <span style={{ color: 'var(--accent-cyan)' }}>Vent moyen: {formatChartValue(activePoint.avgSpeed, ' kts')}</span>
+            <span style={{ color: 'var(--accent-orange)' }}>Rafale: {formatChartValue(activePoint.maxGust, ' kts')}</span>
+            {activePoint.temperature !== null && activePoint.temperature !== undefined && (
+              <span style={{ color: '#b39ddb' }}>Temp. air: {formatChartValue(activePoint.temperature, ' °C')}</span>
+            )}
+            {activePoint.waterTemp !== null && activePoint.waterTemp !== undefined && (
+              <span style={{ color: '#80cbc4' }}>Temp. eau: {formatChartValue(activePoint.waterTemp, ' °C')}</span>
+            )}
+            {hasDirection && (
+              <span style={{ color: 'var(--accent-blue)' }}>Direction: {formatDirection(activePoint.windDirection)}</span>
+            )}
+          </>
+        )}
+      </div>
+
       {/* Wind Speed & Temperature Chart */}
-      <ResponsiveContainer width="100%" height={hasDirection ? 320 : 420} minWidth={0}>
+      <ResponsiveContainer width="100%" height={hasDirection ? 300 : 400} minWidth={0}>
         <ComposedChart
           data={filteredData}
           margin={{ top: 10, right: 5, left: 5, bottom: 0 }}
           syncId={CHART_SYNC_ID}
           syncMethod="value"
+          onMouseMove={handleChartMouseMove}
+          onMouseLeave={handleChartMouseLeave}
         >
           <defs>
             <linearGradient id="colorAvg" x1="0" y1="0" x2="0" y2="1">
@@ -163,6 +214,15 @@ export default function HistoricalChart({ data }) {
             tickFormatter={(val) => Math.round(val)}
           />
           <Tooltip content={<CustomTooltip />} />
+          {activePoint && (
+            <ReferenceLine
+              yAxisId="right"
+              x={activePoint.time}
+              stroke="rgba(255,255,255,0.55)"
+              strokeWidth={1}
+              isFront={true}
+            />
+          )}
           <Area 
             yAxisId="right"
             type="monotone" 
@@ -220,6 +280,8 @@ export default function HistoricalChart({ data }) {
               margin={{ top: 5, right: 5, left: 5, bottom: 0 }}
               syncId={CHART_SYNC_ID}
               syncMethod="value"
+              onMouseMove={handleChartMouseMove}
+              onMouseLeave={handleChartMouseLeave}
             >
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis 
@@ -241,6 +303,15 @@ export default function HistoricalChart({ data }) {
               />
               <YAxis yAxisId="dirR" orientation="right" width={30} tick={false} axisLine={false} />
               <Tooltip content={<CustomTooltip />} />
+              {activePoint && (
+                <ReferenceLine
+                  yAxisId="dir"
+                  x={activePoint.time}
+                  stroke="rgba(255,255,255,0.55)"
+                  strokeWidth={1}
+                  isFront={true}
+                />
+              )}
               <Line
                 yAxisId="dir"
                 type="stepAfter"
@@ -252,6 +323,38 @@ export default function HistoricalChart({ data }) {
                 dot={false}
                 connectNulls={true}
               />
+              {hasActiveDirection && (
+                <Scatter
+                  yAxisId="dir"
+                  data={[activePoint]}
+                  dataKey="windDirection"
+                  name="Direction active"
+                  fill="var(--accent-cyan)"
+                  shape={(props) => {
+                    const { cx, cy, payload } = props;
+                    if (payload.windDirection === null || payload.windDirection === undefined) return null;
+                    const rad = (payload.windDirection * Math.PI) / 180;
+                    const size = 11;
+                    const tipX = cx + Math.sin(rad) * size;
+                    const tipY = cy - Math.cos(rad) * size;
+                    const leftX = cx + Math.sin(rad - 2.5) * size * 0.65;
+                    const leftY = cy - Math.cos(rad - 2.5) * size * 0.65;
+                    const rightX = cx + Math.sin(rad + 2.5) * size * 0.65;
+                    const rightY = cy - Math.cos(rad + 2.5) * size * 0.65;
+                    return (
+                      <g>
+                        <circle cx={cx} cy={cy} r="11" fill="rgba(0, 229, 255, 0.14)" stroke="var(--accent-cyan)" strokeWidth="1.5" />
+                        <polygon
+                          points={`${tipX},${tipY} ${leftX},${leftY} ${rightX},${rightY}`}
+                          fill="var(--accent-cyan)"
+                          opacity={1}
+                        />
+                      </g>
+                    );
+                  }}
+                  isAnimationActive={false}
+                />
+              )}
               <Scatter
                 yAxisId="dir"
                 dataKey="windDirection"
