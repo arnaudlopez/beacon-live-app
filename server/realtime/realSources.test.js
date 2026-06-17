@@ -3,6 +3,7 @@ import {
   createRealWeatherSources,
   parseCandhisHtml,
   parseESurfmarHtml,
+  parseMeteoFranceBuoyObservations,
   parseMeteoFranceObservations,
   parsePioupiouPayload,
   parseWindsUpMobileHtml,
@@ -110,6 +111,35 @@ describe('real weather source adapters', () => {
       temperature: '20.0',
     });
 
+    const meteoFranceV2 = parseMeteoFranceObservations([
+      {
+        validity_time: '2026-06-17T12:06:00Z',
+        ff: 4.7,
+        raf10: 5.8,
+        ddraf10: 220,
+        dd: 220,
+        t: 300.85,
+        u: 65,
+        pmer: 102050,
+      },
+    ]);
+    expect(meteoFranceV2.live).toMatchObject({
+      windSpeed: '9.1',
+      windGust: '11.3',
+      windDirection: 220,
+      temperature: '27.7',
+    });
+
+    const meteoFranceMissingGust = parseMeteoFranceObservations([
+      {
+        validity_time: '2026-06-17T12:06:00Z',
+        ff: 4.7,
+        dd: 220,
+      },
+    ]);
+    expect(meteoFranceMissingGust.live.windGust).toBeNull();
+    expect(meteoFranceMissingGust.history[0].maxGust).toBeNull();
+
     const pioupiou = parsePioupiouPayload(
       {
         data: {
@@ -172,6 +202,43 @@ describe('real weather source adapters', () => {
     expect(esurfmar.live.windSpeed).toBe(12);
     expect(esurfmar.surf.height).toBe(1.2);
 
+    const meteoFranceBuoy = parseMeteoFranceBuoyObservations([
+      {
+        validity_time: '2026-06-17T10:00:00Z',
+        ff: 2.1,
+        dd: 20,
+        rafper: 3.3,
+        haut_vag: 0.2,
+        dir_vag: 36,
+        per_moy_vag: 4,
+        tmer: 295.75,
+      },
+      {
+        validity_time: '2026-06-17T11:00:00Z',
+        ff: 2.4,
+        dd: 30,
+        rafper: 3.8,
+        haut_vag: 0.3,
+        dir_vag: 45,
+        per_moy_vag: 5,
+        tmer: 296.15,
+      },
+    ]);
+    expect(meteoFranceBuoy).toMatchObject({
+      height: 0.3,
+      period: 5,
+      direction: 45,
+      waterTemp: 23,
+      live: {
+        windDirection: 30,
+      },
+    });
+    expect(meteoFranceBuoy.surfHistory).toHaveLength(2);
+    expect(meteoFranceBuoy.surfHistory[1]).toMatchObject({
+      height: 0.3,
+      direction: 45,
+    });
+
     const candhis = parseCandhisHtml(`
       <script>
         arrDataPHP[0] = eval('[["2026-05-25 08:00:00",1.1,null,1.7]]');
@@ -200,6 +267,110 @@ describe('real weather source adapters', () => {
       windGust: 17,
       windDirection: 275,
     });
+  });
+
+  it('fetches Meteo-France observations from v2 before falling back to v1', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+      {
+        validity_time: '2026-06-17T12:06:00Z',
+        ff: 4.7,
+        raf10: 5.8,
+        dd: 220,
+      },
+    ])));
+
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      env: {
+        METEOFRANCE_KEY: 'mf-key',
+      },
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'meteofrance_20004002');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      source: 'meteofrance_20004002',
+      payload: {
+        live: {
+          windGust: '11.3',
+        },
+      },
+    });
+    expect(fetchImpl.mock.calls[0][0]).toContain('/DPPaquetObs/v2/paquet/infrahoraire-6m');
+  });
+
+  it('falls back to Meteo-France v1 when v2 is not authorized', async () => {
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ code: '900908' }), { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([
+        {
+          validity_time: '2026-05-25T08:00:00Z',
+          ff: 5,
+          fxi10: 8,
+          dd: 270,
+        },
+      ])));
+
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      env: {
+        METEOFRANCE_KEY: 'legacy-key',
+      },
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'meteofrance_20004002');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      payload: {
+        live: {
+          windGust: '15.6',
+        },
+      },
+    });
+    expect(fetchImpl.mock.calls[0][0]).toContain('/DPPaquetObs/v2/');
+    expect(fetchImpl.mock.calls[1][0]).toContain('/DPPaquetObs/v1/');
+  });
+
+  it('uses Meteo-France buoy v2 for Ajaccio surf direction when available', async () => {
+    const fetchImpl = vi.fn().mockImplementation((url) => {
+      if (url.includes('/DPObs/v2/bouees')) {
+        return Promise.resolve(new Response(JSON.stringify([
+          {
+            validity_time: '2026-06-17T11:00:00Z',
+            ff: 2.4,
+            dd: 30,
+            rafper: 3.8,
+            haut_vag: 0.3,
+            dir_vag: 45,
+            per_moy_vag: 5,
+            tmer: 296.15,
+          },
+        ])));
+      }
+      return Promise.reject(new Error(`unexpected_url:${url}`));
+    });
+
+    const source = createRealWeatherSources({
+      clock: makeClock('2026-06-17T12:30:00.000Z'),
+      env: {
+        METEOFRANCE_KEY: 'mf-key',
+      },
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'esurfmar_ajaccio');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      source: 'esurfmar_ajaccio',
+      payload: {
+        height: 0.3,
+        direction: 45,
+        surf: {
+          direction: 45,
+        },
+      },
+    });
+    expect(fetchImpl.mock.calls[0][0]).toContain('/DPObs/v2/bouees');
+    expect(fetchImpl.mock.calls[0][0]).toContain('id_bouees=6101031');
   });
 
   it('maps WindsUp directions from per-row degrees and ignores cardinal labels', () => {

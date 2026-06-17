@@ -28,6 +28,25 @@ function toKtsFromKmh(value) {
   return Number((Number(value) / 1.852).toFixed(1));
 }
 
+function firstFiniteNumber(...values) {
+  for (const value of values) {
+    if (value === null || value === undefined || value === '') continue;
+    const numberValue = Number(value);
+    if (Number.isFinite(numberValue)) return numberValue;
+  }
+  return null;
+}
+
+function toCelsiusFromKelvin(value) {
+  const numberValue = firstFiniteNumber(value);
+  if (numberValue === null) return null;
+  return Number((numberValue - 273.15).toFixed(1));
+}
+
+function toIsoNoMillis(time) {
+  return new Date(time).toISOString().replace(/\.\d{3}Z$/, 'Z');
+}
+
 function observedAtFromPayload(payload, fallback) {
   const history = payload?.history || payload?.surfHistory || payload?.waterHistory || [];
   const last = history.at?.(-1);
@@ -48,17 +67,12 @@ async function readText(response) {
 export function parseMeteoFranceObservations(rows) {
   if (!Array.isArray(rows) || rows.length === 0) return null;
   const latest = rows[0];
+  const latestGust = firstFiniteNumber(latest.raf10, latest.fxi10, latest.fxi);
 
   return {
     live: {
       windSpeed: latest.ff ? toKtsFromMs(latest.ff) : '0',
-      windGust: latest.fxi10
-        ? toKtsFromMs(latest.fxi10)
-        : latest.fxi
-          ? toKtsFromMs(latest.fxi)
-          : latest.ff
-            ? toKtsFromMs(latest.ff)
-            : '0',
+      windGust: latestGust !== null ? toKtsFromMs(latestGust) : null,
       windDirection: latest.dd || 0,
       temperature: latest.t ? (Number(latest.t) - 273.15).toFixed(1) : null,
       humidity: latest.u || null,
@@ -66,15 +80,75 @@ export function parseMeteoFranceObservations(rows) {
     },
     history: rows.map((item) => {
       const speed = item.ff ? Number(item.ff) * 1.94384 : 0;
-      const gust = Number(item.fxi10 || item.fxi || item.ff || 0);
+      const gust = firstFiniteNumber(item.raf10, item.fxi10, item.fxi);
       return {
         time: item.validity_time || item.reference_time,
         avgSpeed: Number(speed.toFixed(1)),
-        maxGust: Number((gust * 1.94384).toFixed(1)),
+        maxGust: gust !== null ? Number((gust * 1.94384).toFixed(1)) : null,
         temperature: item.t ? Number((Number(item.t) - 273.15).toFixed(1)) : null,
         windDirection: item.dd ?? null,
       };
     }).reverse(),
+  };
+}
+
+export function parseMeteoFranceBuoyObservations(rows) {
+  if (!Array.isArray(rows) || rows.length === 0) return null;
+
+  const sorted = [...rows]
+    .filter((row) => row?.validity_time || row?.reference_time)
+    .sort((a, b) => new Date(a.validity_time || a.reference_time).getTime() - new Date(b.validity_time || b.reference_time).getTime());
+  const latest = sorted.at(-1);
+  if (!latest) return null;
+
+  const wavePeriod = (row) => {
+    const averagePeriod = firstFiniteNumber(row.per_moy_vag);
+    if (averagePeriod !== null) return averagePeriod;
+    const peakPeriod = firstFiniteNumber(row.per);
+    return peakPeriod !== null && peakPeriod >= 0 ? peakPeriod : null;
+  };
+
+  const surfHistory = sorted.map((row) => ({
+    time: new Date(row.validity_time || row.reference_time).getTime(),
+    height: firstFiniteNumber(row.haut_vag),
+    hmax: firstFiniteNumber(row.hmax_vag, row.haut_max_vag),
+    period: wavePeriod(row),
+    direction: firstFiniteNumber(row.dir_vag),
+    waterTemp: toCelsiusFromKelvin(row.tmer),
+  }));
+
+  const history = sorted.map((row) => ({
+    time: new Date(row.validity_time || row.reference_time).getTime(),
+    avgSpeed: firstFiniteNumber(row.ff) !== null ? Number(toKtsFromMs(row.ff)) : 0,
+    maxGust: firstFiniteNumber(row.rafper) !== null ? Number(toKtsFromMs(row.rafper)) : null,
+    temperature: row.t ? Number((Number(row.t) - 273.15).toFixed(1)) : null,
+    windDirection: firstFiniteNumber(row.dd),
+  }));
+
+  const surf = {
+    height: firstFiniteNumber(latest.haut_vag),
+    hmax: firstFiniteNumber(latest.hmax_vag, latest.haut_max_vag),
+    period: wavePeriod(latest),
+    direction: firstFiniteNumber(latest.dir_vag),
+  };
+
+  return {
+    ...surf,
+    surf,
+    waterTemp: toCelsiusFromKelvin(latest.tmer),
+    surfHistory,
+    waterHistory: surfHistory
+      .filter((row) => row.waterTemp !== null)
+      .map((row) => ({ time: row.time, waterTemp: row.waterTemp })),
+    live: {
+      windSpeed: firstFiniteNumber(latest.ff) !== null ? toKtsFromMs(latest.ff) : '0',
+      windGust: firstFiniteNumber(latest.rafper) !== null ? toKtsFromMs(latest.rafper) : null,
+      windDirection: firstFiniteNumber(latest.dd),
+      temperature: latest.t ? (Number(latest.t) - 273.15).toFixed(1) : null,
+      humidity: latest.u ?? null,
+      pressure: latest.pmer ? (Number(latest.pmer) / 100).toFixed(1) : null,
+    },
+    history,
   };
 }
 
@@ -389,14 +463,39 @@ function sourceReading(sourceId, clock, payload) {
 }
 
 async function fetchMeteoFrance({ stationId, sourceId, key, fetchImpl, clock }) {
-  const url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/infrahoraire-6m?id_station=${stationId}&format=json`;
+  const headers = {
+    apikey: key,
+    accept: 'application/json',
+  };
+  const v2Url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m?id_station=${stationId}&format=json`;
+  const v1Url = `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/infrahoraire-6m?id_station=${stationId}&format=json`;
+  let response = await fetchImpl(v2Url, { headers });
+
+  if (response.status === 401 || response.status === 403 || response.status === 404) {
+    response = await fetchImpl(v1Url, { headers });
+  }
+
+  const rows = await readJson(response);
+  return sourceReading(sourceId, clock, parseMeteoFranceObservations(rows));
+}
+
+async function fetchMeteoFranceBuoy({ sourceId, buoyId, key, fetchImpl, clock }) {
+  const end = Math.floor(clock.now() / 3_600_000) * 3_600_000;
+  const start = end - 48 * 3_600_000;
+  const params = new URLSearchParams({
+    format: 'json',
+    id_bouees: buoyId,
+    date_debut: toIsoNoMillis(start),
+    date_fin: toIsoNoMillis(end),
+  });
+  const url = `https://public-api.meteofrance.fr/public/DPObs/v2/bouees?${params.toString()}`;
   const rows = await readJson(await fetchImpl(url, {
     headers: {
       apikey: key,
       accept: 'application/json',
     },
   }));
-  return sourceReading(sourceId, clock, parseMeteoFranceObservations(rows));
+  return sourceReading(sourceId, clock, parseMeteoFranceBuoyObservations(rows));
 }
 
 async function fetchPioupiou({ sourceId, beaconId, fetchImpl, clock }) {
@@ -594,12 +693,28 @@ export function createRealWeatherSources({
       fetchImpl,
       clock,
     })),
-    makeSource('esurfmar_ajaccio', defaultPollMs, () => fetchESurfmar({
-      sourceId: 'esurfmar_ajaccio',
-      slug: 'ajaccio',
-      fetchImpl,
-      clock,
-    })),
+    makeSource('esurfmar_ajaccio', defaultPollMs, async () => {
+      if (env.METEOFRANCE_KEY) {
+        try {
+          return await fetchMeteoFranceBuoy({
+            sourceId: 'esurfmar_ajaccio',
+            buoyId: '6101031',
+            key: env.METEOFRANCE_KEY,
+            fetchImpl,
+            clock,
+          });
+        } catch (err) {
+          void err;
+          // Keep the legacy eSurfMar parser as a resilience fallback.
+        }
+      }
+      return fetchESurfmar({
+        sourceId: 'esurfmar_ajaccio',
+        slug: 'ajaccio',
+        fetchImpl,
+        clock,
+      });
+    }),
     makeSource('esurfmar_calvi', defaultPollMs, () => fetchESurfmar({
       sourceId: 'esurfmar_calvi',
       slug: 'calvi',

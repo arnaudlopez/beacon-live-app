@@ -56,19 +56,28 @@ function computeTTL(source: string, entry: { data: unknown; fetched_at: string }
 }
 
 async function fetchMF(sid: string) {
-  const r = await fetchWithTimeout(
-    `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/infrahoraire-6m?id_station=${sid}&format=json`,
-    { headers: { apikey: METEOFRANCE_KEY, accept: "application/json" } },
+  const headers = { apikey: METEOFRANCE_KEY, accept: "application/json" };
+  let r = await fetchWithTimeout(
+    `https://public-api.meteofrance.fr/public/DPPaquetObs/v2/paquet/infrahoraire-6m?id_station=${sid}&format=json`,
+    { headers },
     5000
   );
+  if (r.status === 401 || r.status === 403 || r.status === 404) {
+    r = await fetchWithTimeout(
+      `https://public-api.meteofrance.fr/public/DPPaquetObs/v1/paquet/infrahoraire-6m?id_station=${sid}&format=json`,
+      { headers },
+      5000
+    );
+  }
   if (!r.ok) { console.error(`MF ${sid}:${r.status}`); return null; }
   const d = await r.json();
   if (!d || d.length === 0) return null;
   const l = d[0];
+  const latestGust = l.raf10 ?? l.fxi10 ?? l.fxi ?? null;
   return {
     live: {
       windSpeed: l.ff ? (l.ff * 1.94384).toFixed(1) : "0",
-      windGust: l.fxi10 ? (l.fxi10 * 1.94384).toFixed(1) : l.fxi ? (l.fxi * 1.94384).toFixed(1) : (l.ff ? (l.ff * 1.94384).toFixed(1) : "0"),
+      windGust: latestGust !== null ? (latestGust * 1.94384).toFixed(1) : null,
       windDirection: l.dd || 0,
       temperature: l.t ? (l.t - 273.15).toFixed(1) : null,
       humidity: l.u || null,
@@ -76,15 +85,81 @@ async function fetchMF(sid: string) {
     },
     history: d.map((i: Record<string, unknown>) => {
       const s = (i.ff as number) ? (i.ff as number) * 1.94384 : 0;
-      const g = ((i.fxi10 || i.fxi || i.ff) as number) || 0;
+      const g = (i.raf10 ?? i.fxi10 ?? i.fxi ?? null) as number | null;
       return {
         time: i.validity_time || i.reference_time,
         avgSpeed: Number(s.toFixed(1)),
-        maxGust: Number((g * 1.94384).toFixed(1)),
+        maxGust: g !== null ? Number((g * 1.94384).toFixed(1)) : null,
         temperature: (i.t as number) ? Number(((i.t as number) - 273.15).toFixed(1)) : null,
         windDirection: i.dd !== undefined ? i.dd : null
       };
     }).reverse()
+  };
+}
+
+async function fetchMfBuoy(id: string) {
+  const endMs = Math.floor(Date.now() / 3600000) * 3600000;
+  const startMs = endMs - 48 * 3600000;
+  const params = new URLSearchParams({
+    format: "json",
+    id_bouees: id,
+    date_debut: new Date(startMs).toISOString().replace(/\.\d{3}Z$/, "Z"),
+    date_fin: new Date(endMs).toISOString().replace(/\.\d{3}Z$/, "Z")
+  });
+  const r = await fetchWithTimeout(
+    `https://public-api.meteofrance.fr/public/DPObs/v2/bouees?${params.toString()}`,
+    { headers: { apikey: METEOFRANCE_KEY, accept: "application/json" } },
+    7000
+  );
+  if (!r.ok) return null;
+  const d = await r.json();
+  if (!d || d.length === 0) return null;
+  const rows = [...d].sort((a, b) => new Date(a.validity_time || a.reference_time).getTime() - new Date(b.validity_time || b.reference_time).getTime());
+  const l = rows[rows.length - 1];
+  const toC = (v: number | null | undefined) => v !== null && v !== undefined ? Number((v - 273.15).toFixed(1)) : null;
+  const period = (row: Record<string, unknown>) => row.per_moy_vag ?? ((row.per as number) >= 0 ? row.per : null);
+  return {
+    height: l.haut_vag ?? null,
+    hmax: l.hmax_vag ?? l.haut_max_vag ?? null,
+    period: period(l),
+    direction: l.dir_vag ?? null,
+    waterTemp: toC(l.tmer),
+    surf: {
+      height: l.haut_vag ?? null,
+      hmax: l.hmax_vag ?? l.haut_max_vag ?? null,
+      period: period(l),
+      direction: l.dir_vag ?? null
+    },
+    surfHistory: rows.map((i: Record<string, unknown>) => ({
+      time: new Date((i.validity_time || i.reference_time) as string).getTime(),
+      height: i.haut_vag ?? null,
+      hmax: i.hmax_vag ?? i.haut_max_vag ?? null,
+      period: period(i),
+      direction: i.dir_vag ?? null,
+      waterTemp: toC(i.tmer as number | null | undefined)
+    })),
+    waterHistory: rows
+      .filter((i: Record<string, unknown>) => i.tmer !== null && i.tmer !== undefined)
+      .map((i: Record<string, unknown>) => ({ time: new Date((i.validity_time || i.reference_time) as string).getTime(), waterTemp: toC(i.tmer as number) })),
+    live: {
+      windSpeed: l.ff ? (l.ff * 1.94384).toFixed(1) : "0",
+      windGust: l.rafper ? (l.rafper * 1.94384).toFixed(1) : null,
+      windDirection: l.dd ?? null,
+      temperature: l.t ? (l.t - 273.15).toFixed(1) : null,
+      humidity: l.u || null,
+      pressure: l.pmer ? (l.pmer / 100).toFixed(1) : null
+    },
+    history: rows.map((i: Record<string, unknown>) => {
+      const s = (i.ff as number) ? (i.ff as number) * 1.94384 : 0;
+      const g = (i.rafper as number | null | undefined) ?? null;
+      return {
+        time: i.validity_time || i.reference_time,
+        avgSpeed: Number(s.toFixed(1)),
+        maxGust: g !== null ? Number((g * 1.94384).toFixed(1)) : null,
+        temperature: (i.t as number) ? Number(((i.t as number) - 273.15).toFixed(1)) : null,
+        windDirection: i.dd !== undefined ? i.dd : null
+      };
+    })
   };
 }
 
@@ -370,7 +445,13 @@ const SF_STATIC: Record<string, F> = {
   pioupiou_1202: () => fetchPP("1202"),
   candhis_revellata: () => fetchCD("Y2FtcD0wMkIwNA=="),
   candhis_bonifacio: () => fetchCD("Y2FtcD0wMkEwMQ=="),
-  esurfmar_ajaccio: () => fetchES("ajaccio"),
+  esurfmar_ajaccio: async () => {
+    try {
+      return await fetchMfBuoy("6101031") ?? fetchES("ajaccio");
+    } catch {
+      return fetchES("ajaccio");
+    }
+  },
   esurfmar_calvi: () => fetchES("calvi"),
   wunderground_IGROSS105: () => fetchWU("IGROSS105"),
   wunderground_ISARROLA7: () => fetchWU("ISARROLA7"),
