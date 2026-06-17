@@ -312,6 +312,37 @@ describe('weather runtime realtime contract', () => {
     expect(history.map((point) => point.windDirection)).toEqual([260, 270, 252, 250]);
   });
 
+  it('does not invent a gust history point from live average wind when gust is missing', async () => {
+    const clock = makeClock('2026-05-27T08:00:00.000Z');
+    const source = {
+      id: 'meteofrance_20004002',
+      pollMs: 20_000,
+      fetch: vi.fn().mockResolvedValue({
+        source: 'meteofrance_20004002',
+        observedAt: '2026-05-27T08:00:00.000Z',
+        payload: {
+          live: {
+            windSpeed: 9,
+            windGust: null,
+            windDirection: 230,
+          },
+          history: [],
+        },
+      }),
+    };
+    const runtime = createWeatherRuntime({ clock, sources: [source] });
+
+    await runtime.pollDueSources();
+
+    const history = runtime.getSnapshot().windData.lfkj.history;
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({
+      avgSpeed: 9,
+      maxGust: null,
+      windDirection: 230,
+    });
+  });
+
   it('bounds retained wind history to the runtime retention window', async () => {
     const clock = makeClock('2026-05-27T08:00:00.000Z');
     const runtime = createWeatherRuntime({

@@ -75,7 +75,7 @@ function historyPointFromLive(payload, observedAt) {
   return {
     time,
     avgSpeed: payload.live.windSpeed ?? null,
-    maxGust: payload.live.windGust ?? payload.live.windSpeed ?? null,
+    maxGust: payload.live.windGust ?? null,
     temperature: payload.live.temperature ?? null,
     windDirection: payload.live.windDirection ?? null,
   };
