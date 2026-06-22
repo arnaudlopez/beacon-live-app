@@ -89,6 +89,7 @@ describe('weather API server contract', () => {
       const snapshotResponse = await fetch(`${baseUrl}/api/weather`);
       expect(snapshotResponse.status).toBe(200);
       expect(snapshotResponse.headers.get('content-type')).toContain('application/json');
+      expect(snapshotResponse.headers.get('access-control-allow-origin')).toBe('*');
       const snapshot = await snapshotResponse.json();
       expect(snapshot).toMatchObject({
         windData: {
@@ -120,6 +121,7 @@ describe('weather API server contract', () => {
       const eventsResponse = await fetch(`${baseUrl}/api/events`);
       expect(eventsResponse.status).toBe(200);
       expect(eventsResponse.headers.get('content-type')).toContain('text/event-stream');
+      expect(eventsResponse.headers.get('access-control-allow-origin')).toBe('*');
 
       clock.advance(20_000);
       const sseReader = createSseFrameReader(eventsResponse);

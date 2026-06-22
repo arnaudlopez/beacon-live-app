@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { Wind } from 'lucide-react';
+import { CloudSun, ExternalLink, Wind } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -132,6 +132,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
 }
 
 const COMPACT_ZOOM_THRESHOLD = 10;
+const FORECAST_EXPLORER_URL = 'https://corsewind-ai.ajaccio.surf/';
 
 export default function WindMapWidget({ allWindData, activeSourceId, sources, onSourceSelect }) {
   const [zoomLevel, setZoomLevel] = useState(10);
@@ -144,12 +145,23 @@ export default function WindMapWidget({ allWindData, activeSourceId, sources, on
   const isCompact = zoomLevel < COMPACT_ZOOM_THRESHOLD;
 
   return (
-    <div className="glass-panel" style={{ marginTop: '2rem', padding: '1.5rem', animation: 'fadeUp 1.1s ease-out' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
+    <div className="glass-panel wind-map-panel">
+      <div className="wind-map-header">
         <h3 className="widget-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', margin: 0 }}>
           <Wind size={20} style={{ color: 'var(--accent-cyan)' }}/> 
           General Wind Map
         </h3>
+        <a
+          className="forecast-map-link"
+          href={FORECAST_EXPLORER_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Explorer les prévisions dans un nouvel onglet"
+        >
+          <CloudSun size={16} />
+          <span>Explorer les prévisions</span>
+          <ExternalLink size={14} />
+        </a>
       </div>
       
       <div className="surf-map-container" style={{ position: 'relative', background: 'rgba(0,0,0,0.2)', borderRadius: '1rem', padding: '0.5rem', border: '1px solid var(--border-glass)', overflow: 'hidden' }}>

@@ -1,8 +1,15 @@
 import { createServer } from 'node:http';
 
+const CORS_HEADERS = {
+  'access-control-allow-origin': '*',
+  'access-control-allow-methods': 'GET, OPTIONS',
+  'access-control-allow-headers': 'Accept, Content-Type',
+};
+
 function writeJson(res, status, body) {
   const payload = JSON.stringify(body);
   res.writeHead(status, {
+    ...CORS_HEADERS,
     'content-type': 'application/json; charset=utf-8',
     'content-length': new TextEncoder().encode(payload).length,
     'cache-control': 'no-store',
@@ -28,6 +35,12 @@ export function createWeatherApiServer({ runtime, heartbeatMs = 15_000 }) {
   const server = createServer((req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
 
+    if (req.method === 'OPTIONS') {
+      res.writeHead(204, CORS_HEADERS);
+      res.end();
+      return;
+    }
+
     if (req.method !== 'GET') {
       writeJson(res, 405, { error: 'method_not_allowed' });
       return;
@@ -51,6 +64,7 @@ export function createWeatherApiServer({ runtime, heartbeatMs = 15_000 }) {
 
     if (url.pathname === '/api/events') {
       res.writeHead(200, {
+        ...CORS_HEADERS,
         'content-type': 'text/event-stream; charset=utf-8',
         'cache-control': 'no-cache, no-transform',
         connection: 'keep-alive',
