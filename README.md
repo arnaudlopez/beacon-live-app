@@ -9,7 +9,7 @@ L'application agrège intelligemment les données de plusieurs bouées météoro
 ![PWA Ready](https://img.shields.io/badge/PWA-Ready-10b981?style=for-the-badge&logo=pwa)
 ![React](https://img.shields.io/badge/React-19-61dafb?style=for-the-badge&logo=react)
 ![Vite](https://img.shields.io/badge/Vite-8-646cff?style=for-the-badge&logo=vite)
-![Supabase](https://img.shields.io/badge/Supabase-Edge_Functions-3ecf8e?style=for-the-badge&logo=supabase)
+![Docker](https://img.shields.io/badge/Docker-Weather_API-2496ed?style=for-the-badge&logo=docker)
 
 ## ✨ Fonctionnalités clés
 
@@ -20,7 +20,7 @@ L'application agrège intelligemment les données de plusieurs bouées météoro
   - **CANDHIS** (Bouées houlographes La Revellata & Bonifacio)
   - **Pioupiou** (Balise anémomètre Capo di Feno)
   - **eSurfmar** (Données satellites/bouées au large MSG)
-- 🚀 **Architecture "Server-Cache" Anti-Ban** : Les navigateurs des utilisateurs ne contactent plus directement les API externes. Supabase gère un cache proxy intelligent avec Edge Functions toutes les 6 minutes (bypass des limites de taux API Météo-France et erreurs CORS).
+- 🚀 **Architecture backend temps réel** : Les navigateurs des utilisateurs ne contactent plus directement les API externes. Le backend Docker `weather-api` collecte, normalise et expose les données via `/api/weather` et `/api/events`.
 - 🗺️ **Carte Interactive Vectorielle** : Visualisation dynamique de la houle via des animations de lignes de vagues décalées géographiquement sur la mer.
 - 🐳 **Prêt pour le Web et Docker** : Application multi-stage (Node + Nginx Alpine) pour un déploiement autonome et optimal en production.
 
@@ -30,7 +30,7 @@ L'application agrège intelligemment les données de plusieurs bouées météoro
 - **Cartographie** : Leaflet & React-Leaflet v5 (Fonds de carte hybrides / satellites)
 - **Graphiques** : Recharts (Historiques de vent et températures sur 24h)
 - **PWA** : Vite PWA Plugin (Service workers optimisés pour mode Hors-Ligne)
-- **Backend / Proxy** : Supabase (PostgreSQL statique + Deno Edge Functions)
+- **Backend / Proxy** : Backend Node Docker `weather-api` + Nginx proxy
 - **Déploiement** : Docker / Nginx
 
 ## 🚀 Démarrage Rapide (Développement)
@@ -45,8 +45,7 @@ npm install
 
 # 3. Variables d'environnement
 # Créer un fichier .env à la racine
-VITE_SUPABASE_URL="https://votre-compte.supabase.co"
-VITE_SUPABASE_ANON_KEY="votre_cle_anon_publique"
+VITE_WEATHER_BACKEND_URL="/api"
 
 # 4. Lancer le serveur local
 npm run dev

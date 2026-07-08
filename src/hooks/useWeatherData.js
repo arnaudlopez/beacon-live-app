@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 
 /**
  * @typedef {import('../types').AllWindData} AllWindData
@@ -8,66 +7,21 @@ import { createClient } from '@supabase/supabase-js';
  */
 
 /**
- * Hybrid data hook: initial fetch via Edge Function + Supabase Realtime push.
+ * Weather data hook backed by the local realtime weather API.
  * 
  * Flow:
- * 1. On mount: fetch all data via Edge Function (full payload with history)
- * 2. Subscribe to weather_cache table changes via Supabase Realtime
- * 3. On UPDATE event: merge the changed source into state instantly
- * 4. Fallback: poll every 60s in case Realtime drops
+ * 1. On mount: fetch a full snapshot from /api/weather
+ * 2. Subscribe to /api/events for SSE updates
+ * 3. On weather:update: merge the new snapshot into state
+ * 4. Fallback: poll every 60s in case SSE drops
  * 
  * Returns: { windData, surfData, waterData, isLoading, lastUpdated, error, isRealtime }
  */
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const EDGE_FUNCTION_URL = SUPABASE_URL + '/functions/v1/weather-cache';
-const BACKEND_URL = import.meta.env.VITE_WEATHER_BACKEND_URL;
+const BACKEND_URL = import.meta.env.VITE_WEATHER_BACKEND_URL || '/api';
 
-// Fallback polling interval (only used if Realtime is down)
+// Fallback polling interval (only used if SSE is down)
 const FALLBACK_POLL_MS = 60_000;
-const MARINE_POLL_MS = 120_000;
-
-// Map edge function source keys → app source IDs
-const WIND_SOURCE_MAP = {
-  'lfkj': 'meteofrance_20004002',
-  'la_parata': 'meteofrance_20004003',
-  'lfkf': 'meteofrance_20114002',
-  'lfvf': 'meteofrance_20093002',
-  'cap_corse': 'meteofrance_20107001',
-  'lfks': 'meteofrance_20342001',
-  'lfvh': 'meteofrance_20041001',
-  'porticcio': 'windsup_porticcio',
-  'porticcio_haut': 'wunderground_IGROSS105',
-  'mezzavia': 'wunderground_ISARROLA7',
-  'propriano': 'wunderground_ICORSEPR2',
-  'tizzano': 'wunderground_ISARTN1',
-  'bonifacio_tramizzi': 'wunderground_IBONIF6',
-  'la_tonnara': 'windsup_tonnara',
-  'porto_polo': 'windsup_porto_polo',
-  'piantarella': 'windsup_piantarella',
-  'santa_manza': 'windsup_santa_manza',
-  'balistra': 'windsup_balistra',
-  'figari_eole': 'windsup_figari_eole',
-  'ajaccio_buoy': 'esurfmar_ajaccio',
-  'calvi_buoy': 'esurfmar_calvi',
-  'owm-1202': 'pioupiou_1202'
-};
-
-const WIND_EDGE_KEYS = Object.values(WIND_SOURCE_MAP);
-const MARINE_SOURCES = ['candhis_revellata', 'candhis_bonifacio', 'candhis_alistro', 'esurfmar_ajaccio'];
-
-// Fix 5: deduplicate esurfmar_ajaccio which appears in both lists
-const ALL_EDGE_SOURCES = [...new Set([...WIND_EDGE_KEYS, ...MARINE_SOURCES])];
-
-let supabaseClient = null;
-
-function getSupabaseClient() {
-  if (!supabaseClient) {
-    supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  }
-  return supabaseClient;
-}
 
 function normalizeBackendUrl(url) {
   return url ? url.replace(/\/$/, '') : '';
@@ -128,7 +82,6 @@ export function useWeatherData() {
   const [error, setError] = useState('');
   const [isRealtime, setIsRealtime] = useState(false);
 
-  const channelRef = useRef(null);
   const realtimeResetRef = useRef(null);
 
   const markRealtime = useCallback(() => {
@@ -148,203 +101,67 @@ export function useWeatherData() {
     if (realtime) markRealtime();
   }, [markRealtime]);
 
-  // Edge Function fetch (full payload with history)
-  const fetchFromEdge = useCallback(async (sources) => {
-    try {
-      const res = await fetch(EDGE_FUNCTION_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-        },
-        body: JSON.stringify({ sources }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      return json.data || {};
-    } catch (err) {
-      console.error('Edge function fetch error:', err);
-      setError(`Connexion serveur échouée: ${err.message}`);
-      return null;
-    }
-  }, []);
-
-  // Map edge keys → app IDs for wind data
-  const mapWindData = useCallback((data) => {
-    const mapped = {};
-    for (const [appId, edgeKey] of Object.entries(WIND_SOURCE_MAP)) {
-      mapped[appId] = data[edgeKey] || null;
-    }
-    return mapped;
-  }, []);
-
-  // Process marine data
-  const processMarine = useCallback((data) => {
-    const rev = data.candhis_revellata;
-    const bon = data.candhis_bonifacio;
-    const alistro = data.candhis_alistro;
-    const esurf = data.esurfmar_ajaccio;
-
-    if (rev) {
-      setWaterData({ current: rev.waterTemp, history: rev.waterHistory || [] });
-    }
-
-    setSurfData({
-      revellata: rev?.surf ? { ...rev.surf, waterTemp: rev.waterTemp, surfHistory: rev.surfHistory || [] } : null,
-      bonifacio: bon?.surf ? { ...bon.surf, waterTemp: bon.waterTemp, surfHistory: bon.surfHistory || [] } : null,
-      alistro: alistro?.surf ? { ...alistro.surf, waterTemp: alistro.waterTemp, surfHistory: alistro.surfHistory || [] } : null,
-      ajaccio: esurf ? { ...esurf, surfHistory: esurf.surfHistory || [] } : null,
-    });
-  }, []);
-
-  // Initial fetch + setup Realtime
+  // Initial fetch + setup SSE
   useEffect(() => {
     let cancelled = false;
     const backendUrl = normalizeBackendApiUrl(BACKEND_URL);
+    let eventSource = null;
 
-    if (backendUrl) {
-      let eventSource = null;
-
-      const fetchBackendSnapshot = async () => {
-        try {
-          const res = await fetch(`${backendUrl}/weather`, {
-            headers: {
-              Accept: 'application/json',
-            },
-          });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const snapshot = await res.json();
-          if (!cancelled) applyBackendSnapshot(snapshot);
-          return snapshot;
-        } catch (err) {
-          if (!cancelled) {
-            setError(`Connexion backend échouée: ${err.message}`);
-            setIsLoading(false);
-          }
-          return null;
-        }
-      };
-
-      const handleSsePayload = (event, realtime = false) => {
-        try {
-          const payload = JSON.parse(event.data);
-          const snapshot = payload.data || payload;
-          if (!cancelled) applyBackendSnapshot(snapshot, realtime);
-        } catch (err) {
-          if (!cancelled) setError(`Flux temps réel invalide: ${err.message}`);
-        }
-      };
-
-      const openEventSource = () => {
-        if (typeof EventSource === 'undefined') return;
-
-        eventSource = new EventSource(`${backendUrl}/events`);
-        eventSource.addEventListener('weather:snapshot', (event) => handleSsePayload(event));
-        eventSource.addEventListener('weather:update', (event) => handleSsePayload(event, true));
-        eventSource.addEventListener('error', () => {
-          eventSource?.close();
-          fetchBackendSnapshot();
+    const fetchBackendSnapshot = async () => {
+      try {
+        const res = await fetch(`${backendUrl}/weather`, {
+          headers: {
+            Accept: 'application/json',
+          },
         });
-      };
-
-      fetchBackendSnapshot().then(() => {
-        if (!cancelled) openEventSource();
-      });
-
-      const backendInterval = setInterval(fetchBackendSnapshot, FALLBACK_POLL_MS);
-
-      return () => {
-        cancelled = true;
-        clearInterval(backendInterval);
-        if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
-        eventSource?.close();
-      };
-    }
-
-    // --- 1. Initial full fetch (Fix 5+6: single request, no duplicate esurfmar_ajaccio) ---
-    const initialFetch = async () => {
-      const raw = await fetchFromEdge(ALL_EDGE_SOURCES);
-      if (cancelled) return;
-      if (raw) {
-        setWindData(mapWindData(raw));
-        processMarine(raw);
-        setError('');
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const snapshot = await res.json();
+        if (!cancelled) applyBackendSnapshot(snapshot);
+        return snapshot;
+      } catch (err) {
+        if (!cancelled) {
+          setError(`Connexion backend échouée: ${err.message}`);
+          setIsLoading(false);
+        }
+        return null;
       }
-      setLastUpdated(new Date());
-      setIsLoading(false);
     };
 
-    initialFetch();
+    const handleSsePayload = (event, realtime = false) => {
+      try {
+        const payload = JSON.parse(event.data);
+        const snapshot = payload.data || payload;
+        if (!cancelled) applyBackendSnapshot(snapshot, realtime);
+      } catch (err) {
+        if (!cancelled) setError(`Flux temps réel invalide: ${err.message}`);
+      }
+    };
 
-    // --- 2. Subscribe to Realtime changes on weather_cache ---
-    const supabase = getSupabaseClient();
-    const channel = supabase
-      .channel('weather-realtime')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'weather_cache',
-        },
-        (payload) => {
-          const { source, data } = payload.new;
-          console.log(`⚡ Realtime push: ${source}`);
+    const openEventSource = () => {
+      if (typeof EventSource === 'undefined') return;
 
-          // Check if it's a wind source
-          const windEntry = Object.entries(WIND_SOURCE_MAP).find(([, edgeKey]) => edgeKey === source);
-          if (windEntry) {
-            const [appId] = windEntry;
-            setWindData(prev => ({ ...prev, [appId]: data }));
-            setLastUpdated(new Date());
-            markRealtime();
-            return;
-          }
-
-          // Check if it's a marine source
-          if (MARINE_SOURCES.includes(source)) {
-            // Re-fetch full marine to maintain consistency
-            fetchFromEdge(MARINE_SOURCES).then(marineRaw => {
-              if (marineRaw) processMarine(marineRaw);
-            });
-            setLastUpdated(new Date());
-            return;
-          }
-        }
-      )
-      .subscribe((status) => {
-        console.log('Realtime status:', status);
+      eventSource = new EventSource(`${backendUrl}/events`);
+      eventSource.addEventListener('weather:snapshot', (event) => handleSsePayload(event));
+      eventSource.addEventListener('weather:update', (event) => handleSsePayload(event, true));
+      eventSource.addEventListener('error', () => {
+        eventSource?.close();
+        fetchBackendSnapshot();
       });
+    };
 
-    channelRef.current = channel;
+    fetchBackendSnapshot().then(() => {
+      if (!cancelled) openEventSource();
+    });
 
-    // --- 3. Fallback polling (safety net) ---
-    const fallbackInterval = setInterval(async () => {
-      const data = await fetchFromEdge(WIND_EDGE_KEYS);
-      if (data && !cancelled) {
-        setWindData(mapWindData(data));
-        setLastUpdated(new Date());
-        setError('');
-      }
-    }, FALLBACK_POLL_MS);
-
-    const marineInterval = setInterval(async () => {
-      const data = await fetchFromEdge(MARINE_SOURCES);
-      if (data && !cancelled) {
-        processMarine(data);
-      }
-    }, MARINE_POLL_MS);
+    const backendInterval = setInterval(fetchBackendSnapshot, FALLBACK_POLL_MS);
 
     return () => {
       cancelled = true;
-      clearInterval(fallbackInterval);
-      clearInterval(marineInterval);
+      clearInterval(backendInterval);
       if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
-      if (channelRef.current) {
-        getSupabaseClient().removeChannel(channelRef.current);
-      }
+      eventSource?.close();
     };
-  }, [applyBackendSnapshot, fetchFromEdge, mapWindData, markRealtime, processMarine]);
+  }, [applyBackendSnapshot]);
 
   return { windData, surfData, waterData, isLoading, lastUpdated, error, isRealtime };
 }

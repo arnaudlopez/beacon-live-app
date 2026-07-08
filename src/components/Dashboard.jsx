@@ -96,7 +96,7 @@ export default function Dashboard() {
     switchTimerRef.current = setTimeout(() => setActiveSourceRaw(source), 80);
   }, []);
 
-  // All data via Supabase Edge Function + Realtime
+  // All data via the local realtime weather backend.
   const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
 
   const notifications = useNotifications(windData);
