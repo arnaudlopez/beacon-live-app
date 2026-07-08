@@ -1,11 +1,11 @@
 # Production Deployment & Custom Domain
 
-L'application **Beacon Live** est désormais "Production-Ready", architecturée autour de Supabase (Backend/Cache) et de Docker (Frontend/Proxy).
+L'application **Beacon Live** est désormais "Production-Ready", architecturée autour de Docker avec un frontend Nginx et un backend realtime Node `weather-api`.
 
 ## 1. Architecture Actuelle
 
-1. **Client PWA (Docker/Nginx)** : Sert les fichiers statiques React et agit comme un Reverse Proxy privé pour contourner le blocage IP d'Infoclimat (`/api/infoclimat/`).
-2. **Supabase Edge Function (`weather-cache`)** : Centralise, met en cache (6 minutes), et unifie les données de Météo-France, Pioupiou, eSurfmar et CANDHIS. Protège la clé d'API Météo-France en tant que secret serveur.
+1. **Client PWA (Docker/Nginx)** : Sert les fichiers statiques React et proxyfie `/api/*` vers le backend local.
+2. **Backend `weather-api` (Node/Docker)** : Collecte, normalise, met en cache et diffuse les données météo/marine via `/api/weather`, `/api/events` et `/api/health`.
 
 ## 2. Configuration du Domaine (`ajaccio.surf`)
 

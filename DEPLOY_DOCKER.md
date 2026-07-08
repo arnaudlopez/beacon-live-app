@@ -5,21 +5,18 @@ Beacon Live peut maintenant tourner en deux conteneurs locaux :
 - `beacon-live` : frontend React/Vite servi par Nginx.
 - `weather-api` : backend realtime Node qui expose `/api/weather`, `/api/events` et `/api/health`.
 
-Le frontend est compilé avec `VITE_WEATHER_BACKEND_URL=/api`, puis Nginx proxyfie `/api/*` vers `weather-api:8787`. Supabase reste disponible comme fallback si cette variable n'est pas définie dans un autre build.
+Le frontend est compilé avec `VITE_WEATHER_BACKEND_URL=/api`, puis Nginx proxyfie `/api/*` vers `weather-api:8787`.
 
 ## Prérequis
 
 1. Docker et Docker Compose.
-2. Les variables publiques Supabase si vous voulez conserver le fallback existant.
-3. Aucun secret météo n'est requis pour le mode demo local.
+2. Aucun secret météo n'est requis pour le mode demo local.
 
 ## Variables
 
 Exemple `.env` :
 
 ```bash
-VITE_SUPABASE_URL=https://rnjtvepcoxvzlwrulnks.supabase.co
-VITE_SUPABASE_ANON_KEY=VOTRE_CLE_ANON_SUPABASE
 VITE_WEATHER_BACKEND_URL=/api
 
 WEATHER_SOURCE_MODE=real

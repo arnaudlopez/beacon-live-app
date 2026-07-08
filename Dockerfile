@@ -14,12 +14,8 @@ RUN npm ci --legacy-peer-deps || npm install --legacy-peer-deps
 COPY . .
 
 # Définir les variables d'environnement nécessaires au build de Vite (elles seront "cuites" dans le code HTML/JS)
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_WEATHER_BACKEND_URL
 
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
 ENV VITE_WEATHER_BACKEND_URL=$VITE_WEATHER_BACKEND_URL
 
 
