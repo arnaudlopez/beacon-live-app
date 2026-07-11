@@ -510,4 +510,50 @@ describe('real weather source adapters', () => {
       payload: { live: { windSpeed: 10, windGust: 15 } },
     });
   });
+
+  it('uses the latest Wunderground history observation when current returns 204', async () => {
+    const history = {
+      observations: [
+        {
+          obsTimeUtc: '2026-05-25T07:50:00Z',
+          winddirAvg: 270,
+          metric: { windspeedAvg: 10, windgustHigh: 15, tempAvg: 20 },
+        },
+        {
+          obsTimeUtc: '2026-05-25T08:00:00Z',
+          winddirAvg: 280,
+          metric: { windspeedAvg: 18.52, windgustHigh: 27.78, tempAvg: 22.4 },
+        },
+      ],
+    };
+    const fetchImpl = vi.fn((url) => {
+      if (url.includes('/observations/current')) return Promise.resolve(new Response(null, { status: 204 }));
+      return Promise.resolve(new Response(JSON.stringify(history)));
+    });
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'wunderground_ISARTN1');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      observedAt: '2026-05-25T08:00:00.000Z',
+      payload: { live: { windSpeed: 10, windGust: 15, windDirection: 280 } },
+    });
+  });
+
+  it('does not invent a fresh observation time for an empty CANDHIS campaign', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('<html>No current measurements</html>'));
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'candhis_revellata');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      source: 'candhis_revellata',
+      observedAt: null,
+      payload: { surf: null, surfHistory: [] },
+    });
+  });
 });
