@@ -87,10 +87,19 @@ function createTimedFetch(fetchImpl, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
       }, timeoutMs);
       controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
     });
-    const request = Promise.resolve().then(() => fetchImpl(url, {
-      ...init,
-      signal: controller.signal,
-    }));
+    const request = Promise.resolve().then(async () => {
+      const response = await fetchImpl(url, {
+        ...init,
+        signal: controller.signal,
+      });
+      if (typeof response?.arrayBuffer !== 'function') return response;
+      const body = await response.arrayBuffer();
+      return new Response(body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: response.headers,
+      });
+    });
 
     try {
       return await Promise.race([request, timeout]);
