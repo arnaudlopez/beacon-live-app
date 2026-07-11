@@ -10,6 +10,7 @@ import { createWeatherScheduler } from './weatherScheduler.js';
 import { createFileWeatherStore } from './weatherStore.js';
 import { createFilePushStore } from './pushStore.js';
 import { createPushNotificationService } from './pushNotificationService.js';
+import { createMonitoringService } from '../monitoring/monitoringService.js';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 8787;
@@ -62,6 +63,7 @@ export async function createWeatherService({
         requestTimeoutMs: Number(env.WEATHER_REQUEST_TIMEOUT_MS || 15_000),
       })
     : createDemoWeatherSources({ clock, pollMs: intervalMs }),
+  monitoringService = createMonitoringService({ env, fetchImpl, clock }),
 } = {}) {
   const store = createFileWeatherStore({ filePath: storePath, maxObservations });
   const persisted = await store.loadState();
@@ -88,8 +90,24 @@ export async function createWeatherService({
       });
     }
   });
-  const apiServer = createWeatherApiServer({ runtime, pushService, heartbeatMs });
-  const scheduler = createWeatherScheduler({ runtime, intervalMs });
+  const unsubscribeMonitoring = runtime.subscribe((event) => monitoringService.handleRuntimeEvent(event));
+  const apiServer = createWeatherApiServer({
+    runtime,
+    pushService,
+    monitoringService,
+    clock,
+    heartbeatMs,
+    readinessMaxAgeMs: Number(env.WEATHER_READY_MAX_AGE_MS || 300_000),
+  });
+  const scheduler = createWeatherScheduler({
+    runtime,
+    intervalMs,
+    onSuccess: () => monitoringService.sendHeartbeat(),
+    onError: (error) => monitoringService.captureException(error, {
+      fingerprint: ['weather-scheduler-failed'],
+      tags: { incidentType: 'scheduler' },
+    }),
+  });
   let baseUrl = null;
 
   return {
@@ -97,6 +115,7 @@ export async function createWeatherService({
     scheduler,
     store,
     pushService,
+    monitoringService,
     get baseUrl() {
       return baseUrl;
     },
@@ -110,6 +129,7 @@ export async function createWeatherService({
     async stop() {
       scheduler.stop();
       unsubscribePush();
+      unsubscribeMonitoring();
       if (!baseUrl) return;
       await new Promise((resolve, reject) => {
         apiServer.close((error) => {
@@ -118,12 +138,16 @@ export async function createWeatherService({
         });
       });
       baseUrl = null;
+      await monitoringService.flush();
     },
   };
 }
 
+let mainMonitoringService = null;
+
 async function main() {
   const env = globalThis.process?.env ?? {};
+  mainMonitoringService = createMonitoringService({ env });
   const service = await createWeatherService({
     host: env.HOST || DEFAULT_HOST,
     port: Number(env.PORT || DEFAULT_PORT),
@@ -134,6 +158,7 @@ async function main() {
     maxObservations: Number(env.WEATHER_MAX_OBSERVATIONS || DEFAULT_MAX_OBSERVATIONS),
     sourceMode: env.WEATHER_SOURCE_MODE || DEFAULT_SOURCE_MODE,
     env,
+    monitoringService: mainMonitoringService,
   });
   const { baseUrl } = await service.start();
   globalThis.console?.log?.(`Beacon weather service listening on ${baseUrl}`);
@@ -147,8 +172,13 @@ async function main() {
 }
 
 if (globalThis.process?.argv?.[1] && import.meta.url === pathToFileURL(globalThis.process.argv[1]).href) {
-  main().catch((error) => {
+  main().catch(async (error) => {
+    mainMonitoringService?.captureException(error, {
+      fingerprint: ['weather-service-startup-failed'],
+      tags: { incidentType: 'startup' },
+    });
     globalThis.console?.error?.(error);
+    await mainMonitoringService?.flush?.();
     globalThis.process?.exit?.(1);
   });
 }

@@ -120,6 +120,7 @@ function createInitialSourceState() {
 function createSnapshot(clock, initialSnapshot) {
   return {
     ts: initialSnapshot?.ts ?? new Date(clock.now()).toISOString(),
+    checkedAt: initialSnapshot?.checkedAt ?? null,
     windData: clone(initialSnapshot?.windData) ?? {},
     surfData: clone(initialSnapshot?.surfData) ?? {},
     waterData: clone(initialSnapshot?.waterData) ?? null,
@@ -153,6 +154,7 @@ export function createWeatherRuntime({
     }
 
     const initialHealth = snapshot.sourceHealth[source.id];
+    sourceState.consecutiveFailures = Number(initialHealth?.consecutiveFailures) || 0;
     const nextPollAt = toTimestamp(initialHealth?.nextPollAt);
     if (nextPollAt !== null) {
       sourceState.nextPollAt = nextPollAt;
@@ -297,6 +299,7 @@ export function createWeatherRuntime({
     try {
       const reading = await source.fetch();
       const result = mergeReading(source.id, sourceState, reading);
+      const previousFailures = sourceState.consecutiveFailures;
       sourceState.consecutiveFailures = 0;
       const receivedAt = new Date(now).toISOString();
       updateHealth(source.id, {
@@ -308,6 +311,14 @@ export function createWeatherRuntime({
         lastErrorMessage: null,
         nextPollAt: new Date(sourceState.nextPollAt).toISOString(),
       });
+      if (previousFailures > 0) {
+        notify({
+          type: 'weather:source-recovery',
+          sourceId: source.id,
+          previousFailures,
+          recoveredAt: receivedAt,
+        });
+      }
       if (result.changed) {
         await persistObservation({
           sourceId: source.id,
@@ -325,13 +336,25 @@ export function createWeatherRuntime({
         : null;
     } catch (error) {
       sourceState.consecutiveFailures += 1;
+      const attemptedAt = new Date(now).toISOString();
       updateHealth(source.id, {
         status: 'error',
         consecutiveFailures: sourceState.consecutiveFailures,
-        lastAttemptAt: new Date(now).toISOString(),
-        lastErrorAt: new Date(now).toISOString(),
+        lastAttemptAt: attemptedAt,
+        lastErrorAt: attemptedAt,
         lastErrorMessage: error instanceof Error ? error.message : String(error),
         nextPollAt: new Date(sourceState.nextPollAt).toISOString(),
+      });
+      notify({
+        type: 'weather:source-error',
+        sourceId: source.id,
+        consecutiveFailures: sourceState.consecutiveFailures,
+        lastAttemptAt: attemptedAt,
+        error: {
+          name: error instanceof Error ? error.name : 'Error',
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : null,
+        },
       });
       return null;
     }
@@ -352,6 +375,8 @@ export function createWeatherRuntime({
       if (result) changed.push(result);
     }
 
+    snapshot.checkedAt = new Date(clock.now()).toISOString();
+
     if (changed.length > 0) {
       snapshot.ts = new Date(clock.now()).toISOString();
       const observedTimes = changed
@@ -366,10 +391,22 @@ export function createWeatherRuntime({
       };
       await persistSnapshot();
       notify(event);
+      notify({
+        type: 'weather:poll-complete',
+        sources: dueSources.map((source) => source.id),
+        checkedAt: snapshot.checkedAt,
+        sourceHealth: snapshot.sourceHealth,
+      });
       return [event];
     }
 
     await persistSnapshot();
+    notify({
+      type: 'weather:poll-complete',
+      sources: dueSources.map((source) => source.id),
+      checkedAt: snapshot.checkedAt,
+      sourceHealth: snapshot.sourceHealth,
+    });
     return [];
   }
 

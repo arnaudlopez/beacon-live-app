@@ -9,9 +9,11 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "monitoring:smoke": "node server/monitoring/smoke.js"
   },
   "dependencies": {
+    "@sentry/node": "^10.65.0",
     "date-fns": "^4.1.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^1.0.1",

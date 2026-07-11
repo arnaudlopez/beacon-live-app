@@ -1,6 +1,6 @@
 const DEFAULT_INTERVAL_MS = 20_000;
 
-export function createWeatherScheduler({ runtime, intervalMs = DEFAULT_INTERVAL_MS, onError } = {}) {
+export function createWeatherScheduler({ runtime, intervalMs = DEFAULT_INTERVAL_MS, onError, onSuccess } = {}) {
   if (!runtime || typeof runtime.pollDueSources !== 'function') {
     throw new Error('createWeatherScheduler requires a weather runtime');
   }
@@ -17,7 +17,9 @@ export function createWeatherScheduler({ runtime, intervalMs = DEFAULT_INTERVAL_
 
     polling = true;
     try {
-      return await runtime.pollDueSources();
+      const result = await runtime.pollDueSources();
+      if (onSuccess) await onSuccess(result);
+      return result;
     } catch (error) {
       onError?.(error);
       return [];

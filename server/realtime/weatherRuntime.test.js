@@ -167,6 +167,41 @@ describe('weather runtime realtime contract', () => {
     }));
   });
 
+  it('emits operational error, recovery, and poll-complete events without exposing them as data updates', async () => {
+    const clock = makeClock();
+    const source = {
+      id: 'windsup_porticcio',
+      pollMs: 20_000,
+      fetch: vi.fn()
+        .mockRejectedValueOnce(new Error('upstream_timeout_15000ms'))
+        .mockResolvedValueOnce(reading('windsup_porticcio', '2026-05-25T08:00:20.000Z', 12)),
+    };
+    const runtime = createWeatherRuntime({ clock, sources: [source] });
+    const events = [];
+    runtime.subscribe((event) => events.push(event));
+
+    await runtime.pollDueSources();
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'weather:source-error',
+        sourceId: 'windsup_porticcio',
+        consecutiveFailures: 1,
+      }),
+      expect.objectContaining({ type: 'weather:poll-complete' }),
+    ]));
+    expect(runtime.getSnapshot().checkedAt).toBe('2026-05-25T08:00:00.000Z');
+
+    clock.advance(20_000);
+    await runtime.pollDueSources();
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        type: 'weather:source-recovery',
+        sourceId: 'windsup_porticcio',
+        previousFailures: 1,
+      }),
+    ]));
+  });
+
   it('routes all dashboard source families into their UI buckets', async () => {
     const clock = makeClock();
     const sources = [

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
 import { Buffer } from 'node:buffer';
+import { assessReadiness, summarizeProviders } from './healthStatus.js';
 
 const CORS_HEADERS = {
   'access-control-allow-origin': '*',
@@ -51,7 +52,14 @@ async function readJson(req) {
   }
 }
 
-export function createWeatherApiServer({ runtime, pushService, heartbeatMs = 15_000 }) {
+export function createWeatherApiServer({
+  runtime,
+  pushService,
+  monitoringService,
+  clock = { now: () => Date.now() },
+  heartbeatMs = 15_000,
+  readinessMaxAgeMs = 300_000,
+}) {
   if (!runtime || typeof runtime.getSnapshot !== 'function' || typeof runtime.subscribe !== 'function') {
     throw new Error('createWeatherApiServer requires a weather runtime');
   }
@@ -123,6 +131,28 @@ export function createWeatherApiServer({ runtime, pushService, heartbeatMs = 15_
       return;
     }
 
+    if (url.pathname === '/api/health/live') {
+      writeJson(res, 200, {
+        status: 'live',
+        ts: new Date(clock.now()).toISOString(),
+      });
+      return;
+    }
+
+    if (url.pathname === '/api/health/ready') {
+      const readiness = assessReadiness(runtime.getSnapshot(), {
+        now: clock.now(),
+        maxAgeMs: readinessMaxAgeMs,
+      });
+      writeJson(res, readiness.ready ? 200 : 503, readiness);
+      return;
+    }
+
+    if (url.pathname === '/api/health/providers') {
+      writeJson(res, 200, summarizeProviders(runtime.getSnapshot(), clock.now()));
+      return;
+    }
+
     if (url.pathname === '/api/health') {
       const snapshot = runtime.getSnapshot();
       writeJson(res, 200, {
@@ -130,8 +160,11 @@ export function createWeatherApiServer({ runtime, pushService, heartbeatMs = 15_
         sseClients: clients.size,
         pushConfigured: Boolean(pushService?.isConfigured?.()),
         pushSubscriptions: pushService?.getSubscriptionCount?.() ?? 0,
+        sentryConfigured: Boolean(monitoringService?.isSentryConfigured?.()),
+        heartbeatConfigured: Boolean(monitoringService?.isHeartbeatConfigured?.()),
         sourceHealth: snapshot.sourceHealth || {},
         ts: snapshot.ts,
+        checkedAt: snapshot.checkedAt,
       });
       return;
     }
@@ -163,7 +196,7 @@ export function createWeatherApiServer({ runtime, pushService, heartbeatMs = 15_
       }, heartbeatMs);
 
       const unsubscribe = runtime.subscribe((event) => {
-        if (!res.destroyed) {
+        if (!res.destroyed && event.type === 'weather:update') {
           res.write(formatSseEvent(event));
         }
       });

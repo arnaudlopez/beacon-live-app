@@ -209,6 +209,53 @@ describe('weather API server contract', () => {
     }
   });
 
+  it('separates liveness, readiness, and provider degradation', async () => {
+    const clock = makeClock();
+    const source = {
+      id: 'esurfmar_calvi',
+      pollMs: 60_000,
+      fetch: vi.fn().mockResolvedValue({
+        source: 'esurfmar_calvi',
+        observedAt: '2026-05-01T08:00:00.000Z',
+        payload: {
+          live: { windSpeed: 3, windGust: 5, windDirection: 250 },
+          history: [{ time: '2026-05-01T08:00:00.000Z', avgSpeed: 3, maxGust: 5 }],
+          surfHistory: [],
+        },
+      }),
+    };
+    const runtime = createWeatherRuntime({ clock, sources: [source] });
+    const server = createWeatherApiServer({ runtime, clock, readinessMaxAgeMs: 300_000 });
+    const baseUrl = await listen(server);
+
+    try {
+      const beforeResponse = await fetch(`${baseUrl}/api/health/ready`);
+      expect(beforeResponse.status).toBe(503);
+      await expect(beforeResponse.json()).resolves.toMatchObject({
+        ready: false,
+        reasons: expect.arrayContaining(['scheduler_not_checked_yet']),
+      });
+
+      await runtime.pollDueSources();
+      const liveResponse = await fetch(`${baseUrl}/api/health/live`);
+      expect(liveResponse.status).toBe(200);
+      await expect(liveResponse.json()).resolves.toMatchObject({ status: 'live' });
+
+      const readyResponse = await fetch(`${baseUrl}/api/health/ready`);
+      expect(readyResponse.status).toBe(200);
+      await expect(readyResponse.json()).resolves.toMatchObject({ ready: true, status: 'ready' });
+
+      const providersResponse = await fetch(`${baseUrl}/api/health/providers`);
+      expect(providersResponse.status).toBe(200);
+      await expect(providersResponse.json()).resolves.toMatchObject({
+        status: 'degraded',
+        counts: { stale: 1 },
+      });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
   it('sends an initial snapshot event and heartbeat frames on the SSE stream', async () => {
     const runtime = createWeatherRuntime({
       clock: makeClock(),

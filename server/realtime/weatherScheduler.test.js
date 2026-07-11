@@ -50,4 +50,15 @@ describe('weather scheduler contract', () => {
       vi.useRealTimers();
     }
   });
+
+  it('runs the success hook after a completed poll and routes hook failures to onError', async () => {
+    const runtime = { pollDueSources: vi.fn().mockResolvedValue([{ type: 'weather:update' }]) };
+    const onSuccess = vi.fn().mockRejectedValue(new Error('heartbeat unavailable'));
+    const onError = vi.fn();
+    const scheduler = createWeatherScheduler({ runtime, onSuccess, onError });
+
+    await expect(scheduler.pollOnce()).resolves.toEqual([]);
+    expect(onSuccess).toHaveBeenCalledWith([{ type: 'weather:update' }]);
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'heartbeat unavailable' }));
+  });
 });
