@@ -33,6 +33,7 @@ ENV PORT=8787
 ENV WEATHER_STORE_PATH=/data/weather-state.json
 ENV WEATHER_POLL_MS=20000
 ENV WEATHER_HEARTBEAT_MS=15000
+ENV PUSH_STORE_PATH=/data/push-state.json
 
 COPY package*.json ./
 RUN npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps

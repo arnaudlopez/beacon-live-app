@@ -163,6 +163,52 @@ describe('weather API server contract', () => {
     }
   });
 
+  it('exposes Web Push configuration and subscription routes', async () => {
+    const runtime = createWeatherRuntime({ clock: makeClock(), sources: [] });
+    const pushService = {
+      isConfigured: () => true,
+      getPublicKey: () => 'vapid-public-key',
+      getSubscriptionCount: () => 2,
+      upsert: vi.fn(async () => ({ alertCount: 1 })),
+      remove: vi.fn(async () => ({ removed: true })),
+    };
+    const server = createWeatherApiServer({ runtime, pushService });
+    const baseUrl = await listen(server);
+
+    try {
+      const configResponse = await fetch(`${baseUrl}/api/push/public-key`);
+      await expect(configResponse.json()).resolves.toEqual({ configured: true, publicKey: 'vapid-public-key' });
+
+      const body = {
+        subscription: { endpoint: 'https://push.example/device' },
+        alerts: { porticcio: { enabled: true } },
+      };
+      const subscribeResponse = await fetch(`${baseUrl}/api/push/subscriptions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      expect(subscribeResponse.status).toBe(200);
+      expect(pushService.upsert).toHaveBeenCalledWith(body);
+
+      const unsubscribeResponse = await fetch(`${baseUrl}/api/push/subscriptions`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: 'https://push.example/device' }),
+      });
+      expect(unsubscribeResponse.status).toBe(200);
+      expect(pushService.remove).toHaveBeenCalledWith('https://push.example/device');
+
+      const healthResponse = await fetch(`${baseUrl}/api/health`);
+      await expect(healthResponse.json()).resolves.toMatchObject({
+        pushConfigured: true,
+        pushSubscriptions: 2,
+      });
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+  });
+
   it('sends an initial snapshot event and heartbeat frames on the SSE stream', async () => {
     const runtime = createWeatherRuntime({
       clock: makeClock(),
