@@ -30,6 +30,12 @@ WUNDERGROUND_API_KEY=
 VAPID_PUBLIC_KEY=VOTRE_CLE_PUBLIQUE_VAPID
 VAPID_PRIVATE_KEY=VOTRE_CLE_PRIVEE_VAPID
 VAPID_SUBJECT=mailto:admin@votre-domaine.fr
+APP_ENV=production
+APP_RELEASE=SHA_DU_COMMIT_DEPLOYE
+SENTRY_DSN=DSN_DU_PROJET_SENTRY_NODE
+MONITOR_HEARTBEAT_URL=URL_SECRETE_DU_HEARTBEAT
+MONITOR_HEARTBEAT_INTERVAL_MS=60000
+WEATHER_READY_MAX_AGE_MS=300000
 ```
 
 `WEATHER_SOURCE_MODE=real` active les adaptateurs météo Node côté `weather-api`.
@@ -48,6 +54,14 @@ Variables à ajouter dans Portainer :
 - `VAPID_PUBLIC_KEY`
 - `VAPID_PRIVATE_KEY`
 - `VAPID_SUBJECT` (une URL `mailto:` ou HTTPS permettant de contacter l'administrateur)
+- `APP_ENV=production`
+- `APP_RELEASE` (SHA du commit Git déployé)
+- `SENTRY_DSN` (projet Sentry Node.js, secret serveur)
+- `MONITOR_HEARTBEAT_URL` (heartbeat externe Better Stack ou compatible)
+- `MONITOR_HEARTBEAT_INTERVAL_MS=60000`
+- `WEATHER_READY_MAX_AGE_MS=300000`
+
+La procédure complète de monitoring, les règles anti-spam et le runbook sont documentés dans [`docs/MONITORING.md`](docs/MONITORING.md).
 
 ## Activer les notifications lorsque la PWA est fermée
 
