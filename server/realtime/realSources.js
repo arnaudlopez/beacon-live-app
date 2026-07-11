@@ -52,7 +52,8 @@ function observedAtFromPayload(payload, fallback) {
   const history = payload?.history || payload?.surfHistory || payload?.waterHistory || [];
   const last = history.at?.(-1);
   if (last?.time) return new Date(last.time).toISOString();
-  return new Date(fallback).toISOString();
+  if (payload?.live) return new Date(fallback).toISOString();
+  return null;
 }
 
 async function readJson(response) {
@@ -94,7 +95,8 @@ function createTimedFetch(fetchImpl, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
       });
       if (typeof response?.arrayBuffer !== 'function') return response;
       const body = await response.arrayBuffer();
-      return new Response(body, {
+      const bodyAllowed = ![204, 205, 304].includes(response.status);
+      return new Response(bodyAllowed ? body : null, {
         status: response.status,
         statusText: response.statusText,
         headers: response.headers,
@@ -572,10 +574,28 @@ async function fetchESurfmar({ sourceId, slug, fetchImpl, clock }) {
 
 async function fetchWunderground({ sourceId, stationId, apiKey, fetchImpl, clock }) {
   const baseUrl = 'https://api.weather.com/v2/pws';
-  const [liveJson, historyJson] = await Promise.all([
-    fetchJson(fetchImpl, `${baseUrl}/observations/current?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`),
+  const [currentJson, historyJson] = await Promise.all([
+    fetchImpl(`${baseUrl}/observations/current?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`)
+      .then((response) => response.status === 204 ? null : readJson(response)),
     fetchJson(fetchImpl, `${baseUrl}/observations/all/1day?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`),
   ]);
+  const latestHistoryObservation = [...(historyJson?.observations ?? [])]
+    .sort((left, right) => new Date(right.obsTimeUtc).getTime() - new Date(left.obsTimeUtc).getTime())[0];
+  const historyMetric = latestHistoryObservation?.metric;
+  const liveJson = currentJson ?? (latestHistoryObservation
+    ? { observations: [{
+        ...latestHistoryObservation,
+        winddir: latestHistoryObservation.winddir ?? latestHistoryObservation.winddirAvg,
+        metric: {
+          ...historyMetric,
+          windSpeed: historyMetric?.windSpeed ?? historyMetric?.windspeedAvg,
+          windGust: historyMetric?.windGust ?? historyMetric?.windgustHigh,
+          temp: historyMetric?.temp ?? historyMetric?.tempAvg,
+          pressure: historyMetric?.pressure ?? historyMetric?.pressureMax,
+        },
+      }] }
+    : null);
+  if (!liveJson) throw new Error('wunderground_no_observations');
   return sourceReading(sourceId, clock, parseWundergroundPayload(liveJson, historyJson));
 }
 
