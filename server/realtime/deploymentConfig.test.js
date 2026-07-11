@@ -27,6 +27,7 @@ describe('realtime Docker deployment config', () => {
     expect(compose).toContain('WINDSUP_USER=${WINDSUP_USER:-}');
     expect(compose).toContain('WINDSUP_PASS=${WINDSUP_PASS:-}');
     expect(compose).toContain('WEATHER_MAX_OBSERVATIONS=${WEATHER_MAX_OBSERVATIONS:-500}');
+    expect(compose).toContain('WEATHER_REQUEST_TIMEOUT_MS=${WEATHER_REQUEST_TIMEOUT_MS:-15000}');
     expect(compose).toContain('max-size: "10m"');
     expect(compose).toContain('max-file: "3"');
     expect(compose).toContain('weather-data:');
@@ -63,6 +64,7 @@ describe('realtime Docker deployment config', () => {
 
     expect(envExample).toContain('WEATHER_SOURCE_MODE=real');
     expect(envExample).toContain('WEATHER_MAX_OBSERVATIONS=500');
+    expect(envExample).toContain('WEATHER_REQUEST_TIMEOUT_MS=15000');
     expect(envExample).toContain('METEOFRANCE_KEY=');
     expect(envExample).toContain('WINDSUP_USER=');
     expect(envExample).toContain('WINDSUP_PASS=');
