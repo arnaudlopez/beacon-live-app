@@ -9,6 +9,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
+      workbox: {
+        importScripts: ['/push-sw.js']
+      },
       manifest: {
         name: 'Beacon Live — Télémétrie Maritime',
         short_name: 'BeaconLive',

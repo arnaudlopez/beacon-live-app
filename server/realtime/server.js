@@ -1,12 +1,15 @@
 import { once } from 'node:events';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import webpush from 'web-push';
 import { createDemoWeatherSources } from './demoSources.js';
 import { createRealWeatherSources } from './realSources.js';
 import { createWeatherApiServer } from './weatherApiServer.js';
 import { createWeatherRuntime } from './weatherRuntime.js';
 import { createWeatherScheduler } from './weatherScheduler.js';
 import { createFileWeatherStore } from './weatherStore.js';
+import { createFilePushStore } from './pushStore.js';
+import { createPushNotificationService } from './pushNotificationService.js';
 
 const DEFAULT_HOST = '127.0.0.1';
 const DEFAULT_PORT = 8787;
@@ -26,6 +29,11 @@ function defaultStorePath() {
   return join(cwd, 'data', 'weather-state.json');
 }
 
+function defaultPushStorePath() {
+  const cwd = globalThis.process?.cwd?.() ?? '.';
+  return join(cwd, 'data', 'push-state.json');
+}
+
 async function listen(server, { host, port }) {
   server.listen(port, host);
   await once(server, 'listening');
@@ -38,6 +46,7 @@ export async function createWeatherService({
   host = DEFAULT_HOST,
   port = DEFAULT_PORT,
   storePath = defaultStorePath(),
+  pushStorePath = defaultPushStorePath(),
   intervalMs = DEFAULT_INTERVAL_MS,
   heartbeatMs = DEFAULT_HEARTBEAT_MS,
   maxObservations = DEFAULT_MAX_OBSERVATIONS,
@@ -56,7 +65,24 @@ export async function createWeatherService({
     initialSnapshot: persisted.snapshot,
     store,
   });
-  const apiServer = createWeatherApiServer({ runtime, heartbeatMs });
+  const vapidPublicKey = env.VAPID_PUBLIC_KEY || '';
+  const vapidPrivateKey = env.VAPID_PRIVATE_KEY || '';
+  const vapidSubject = env.VAPID_SUBJECT || 'mailto:admin@example.com';
+  const pushConfigured = Boolean(vapidPublicKey && vapidPrivateKey);
+  if (pushConfigured) webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+  const pushService = await createPushNotificationService({
+    store: createFilePushStore({ filePath: pushStorePath }),
+    sender: pushConfigured ? webpush : null,
+    publicKey: pushConfigured ? vapidPublicKey : '',
+  });
+  const unsubscribePush = runtime.subscribe((event) => {
+    if (event.type === 'weather:update') {
+      pushService.handleSnapshot(event.data).catch((error) => {
+        globalThis.console?.error?.('Push alert evaluation failed:', error);
+      });
+    }
+  });
+  const apiServer = createWeatherApiServer({ runtime, pushService, heartbeatMs });
   const scheduler = createWeatherScheduler({ runtime, intervalMs });
   let baseUrl = null;
 
@@ -64,6 +90,7 @@ export async function createWeatherService({
     runtime,
     scheduler,
     store,
+    pushService,
     get baseUrl() {
       return baseUrl;
     },
@@ -76,6 +103,7 @@ export async function createWeatherService({
     },
     async stop() {
       scheduler.stop();
+      unsubscribePush();
       if (!baseUrl) return;
       await new Promise((resolve, reject) => {
         apiServer.close((error) => {
@@ -94,6 +122,7 @@ async function main() {
     host: env.HOST || DEFAULT_HOST,
     port: Number(env.PORT || DEFAULT_PORT),
     storePath: env.WEATHER_STORE_PATH || defaultStorePath(),
+    pushStorePath: env.PUSH_STORE_PATH || defaultPushStorePath(),
     intervalMs: Number(env.WEATHER_POLL_MS || DEFAULT_INTERVAL_MS),
     heartbeatMs: Number(env.WEATHER_HEARTBEAT_MS || DEFAULT_HEARTBEAT_MS),
     maxObservations: Number(env.WEATHER_MAX_OBSERVATIONS || DEFAULT_MAX_OBSERVATIONS),

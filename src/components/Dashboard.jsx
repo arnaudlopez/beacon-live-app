@@ -85,7 +85,8 @@ const WindCompass = React.memo(({ direction, delay }) => {
 
 export default function Dashboard() {
   const [activeSource, setActiveSourceRaw] = useState(() => {
-    const savedId = loadPreference(ACTIVE_SOURCE_KEY, null);
+    const linkedId = new URLSearchParams(window.location.search).get('source');
+    const savedId = linkedId || loadPreference(ACTIVE_SOURCE_KEY, null);
     return SOURCES.find(s => s.id === savedId) || SOURCES[0];
   });
 
@@ -262,6 +263,7 @@ export default function Dashboard() {
       </div>
 
       {errorMessage && <div className="error-message" role="alert">{errorMessage}</div>}
+      {notifications.deliveryError && <div className="error-message" role="alert">{notifications.deliveryError}</div>}
 
       {isLoading && !weatherData && (
         <div>
