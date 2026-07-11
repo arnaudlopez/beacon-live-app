@@ -469,4 +469,45 @@ describe('real weather source adapters', () => {
 
     await expect(source.fetch()).rejects.toThrow('upstream_timeout_10ms');
   });
+
+  it('keeps the request alive until a streamed response body is consumed', async () => {
+    const streamedJson = (payload, signal) => new Response(new ReadableStream({
+      start(stream) {
+        const timer = setTimeout(() => {
+          stream.enqueue(new TextEncoder().encode(JSON.stringify(payload)));
+          stream.close();
+        }, 10);
+        signal.addEventListener('abort', () => {
+          clearTimeout(timer);
+          stream.error(new DOMException('The operation was aborted.', 'AbortError'));
+        }, { once: true });
+      },
+    }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+    const fetchImpl = vi.fn((url, init) => {
+      if (url.includes('/observations/current')) {
+        return Promise.resolve(streamedJson({
+          observations: [{
+            obsTimeUtc: '2026-05-25T08:00:00Z',
+            winddir: 280,
+            metric: { windSpeed: 18.52, windGust: 27.78, temp: 22.4, pressure: 1012 },
+          }],
+        }, init.signal));
+      }
+      return Promise.resolve(streamedJson({ observations: [] }, init.signal));
+    });
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      fetchImpl,
+      pollMs: 20_000,
+      requestTimeoutMs: 100,
+    }).find((item) => item.id === 'wunderground_IGROSS105');
+
+    await expect(source.fetch()).resolves.toMatchObject({
+      source: 'wunderground_IGROSS105',
+      payload: { live: { windSpeed: 10, windGust: 15 } },
+    });
+  });
 });
