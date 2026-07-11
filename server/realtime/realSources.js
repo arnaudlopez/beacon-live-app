@@ -1,5 +1,6 @@
 const DEFAULT_FAST_POLL_MS = 30_000;
 const DEFAULT_SLOW_POLL_MS = 15 * 60_000;
+const DEFAULT_REQUEST_TIMEOUT_MS = 15_000;
 const WUNDERGROUND_API_KEY = 'e1f10a1e78da46f5b10a1e78da96f525';
 
 const FR_MONTHS = {
@@ -56,12 +57,54 @@ function observedAtFromPayload(payload, fallback) {
 
 async function readJson(response) {
   if (!response.ok) throw new Error(`upstream_http_${response.status}`);
-  return response.json();
+  try {
+    if (typeof response.text === 'function') {
+      const body = await response.text();
+      if (!body.trim()) throw new Error('empty_body');
+      return JSON.parse(body);
+    }
+    return await response.json();
+  } catch (error) {
+    const reason = error?.message === 'empty_body' ? 'empty_body' : 'malformed_body';
+    throw new Error(`upstream_invalid_json_${reason}`, { cause: error });
+  }
 }
 
 async function readText(response) {
   if (!response.ok) throw new Error(`upstream_http_${response.status}`);
   return response.text();
+}
+
+function createTimedFetch(fetchImpl, timeoutMs = DEFAULT_REQUEST_TIMEOUT_MS) {
+  return async (url, init = {}) => {
+    const controller = new AbortController();
+    let timedOut = false;
+    const timeout = new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        timedOut = true;
+        controller.abort();
+        reject(new Error(`upstream_timeout_${timeoutMs}ms`));
+      }, timeoutMs);
+      controller.signal.addEventListener('abort', () => clearTimeout(timeoutId), { once: true });
+    });
+    const request = Promise.resolve().then(() => fetchImpl(url, {
+      ...init,
+      signal: controller.signal,
+    }));
+
+    try {
+      return await Promise.race([request, timeout]);
+    } catch (error) {
+      if (timedOut) throw new Error(`upstream_timeout_${timeoutMs}ms`, { cause: error });
+      throw error;
+    } finally {
+      controller.abort();
+    }
+  };
+}
+
+async function fetchJson(fetchImpl, url, init) {
+  return readJson(await fetchImpl(url, init));
 }
 
 export function parseMeteoFranceObservations(rows) {
@@ -489,12 +532,12 @@ async function fetchMeteoFranceBuoy({ sourceId, buoyId, key, fetchImpl, clock })
     date_fin: toIsoNoMillis(end),
   });
   const url = `https://public-api.meteofrance.fr/public/DPObs/v2/bouees?${params.toString()}`;
-  const rows = await readJson(await fetchImpl(url, {
+  const rows = await fetchJson(fetchImpl, url, {
     headers: {
       apikey: key,
       accept: 'application/json',
     },
-  }));
+  });
   return sourceReading(sourceId, clock, parseMeteoFranceBuoyObservations(rows));
 }
 
@@ -502,8 +545,8 @@ async function fetchPioupiou({ sourceId, beaconId, fetchImpl, clock }) {
   const stop = new Date(clock.now()).toISOString();
   const start = new Date(clock.now() - 48 * 3_600_000).toISOString();
   const [liveJson, archiveJson] = await Promise.all([
-    readJson(await fetchImpl(`https://api.pioupiou.fr/v1/live/${beaconId}`)),
-    readJson(await fetchImpl(`https://api.pioupiou.fr/v1/archive/${beaconId}?start=${start}&stop=${stop}`)),
+    fetchJson(fetchImpl, `https://api.pioupiou.fr/v1/live/${beaconId}`),
+    fetchJson(fetchImpl, `https://api.pioupiou.fr/v1/archive/${beaconId}?start=${start}&stop=${stop}`),
   ]);
   return sourceReading(sourceId, clock, parsePioupiouPayload(liveJson, archiveJson));
 }
@@ -521,8 +564,8 @@ async function fetchESurfmar({ sourceId, slug, fetchImpl, clock }) {
 async function fetchWunderground({ sourceId, stationId, apiKey, fetchImpl, clock }) {
   const baseUrl = 'https://api.weather.com/v2/pws';
   const [liveJson, historyJson] = await Promise.all([
-    readJson(await fetchImpl(`${baseUrl}/observations/current?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`)),
-    readJson(await fetchImpl(`${baseUrl}/observations/all/1day?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`)),
+    fetchJson(fetchImpl, `${baseUrl}/observations/current?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`),
+    fetchJson(fetchImpl, `${baseUrl}/observations/all/1day?apiKey=${apiKey}&stationId=${stationId}&numericPrecision=decimal&format=json&units=m`),
   ]);
   return sourceReading(sourceId, clock, parseWundergroundPayload(liveJson, historyJson));
 }
@@ -601,6 +644,7 @@ export function createRealWeatherSources({
   env = {},
   fetchImpl = globalThis.fetch,
   pollMs = DEFAULT_FAST_POLL_MS,
+  requestTimeoutMs = DEFAULT_REQUEST_TIMEOUT_MS,
 } = {}) {
   if (!clock || typeof clock.now !== 'function') {
     throw new Error('createRealWeatherSources requires a clock with now()');
@@ -608,6 +652,11 @@ export function createRealWeatherSources({
   if (typeof fetchImpl !== 'function') {
     throw new Error('createRealWeatherSources requires fetchImpl');
   }
+  if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+    throw new Error('createRealWeatherSources requires a positive requestTimeoutMs');
+  }
+
+  const timedFetch = createTimedFetch(fetchImpl, requestTimeoutMs);
 
   const fastPollMs = Math.max(20_000, pollMs);
   const defaultPollMs = Math.max(60_000, pollMs);
@@ -620,49 +669,49 @@ export function createRealWeatherSources({
         stationId: '20004002',
         sourceId: 'meteofrance_20004002',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
       makeSource('meteofrance_20004003', defaultPollMs, () => fetchMeteoFrance({
         stationId: '20004003',
         sourceId: 'meteofrance_20004003',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
       makeSource('meteofrance_20114002', defaultPollMs, () => fetchMeteoFrance({
         stationId: '20114002',
         sourceId: 'meteofrance_20114002',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
       makeSource('meteofrance_20093002', defaultPollMs, () => fetchMeteoFrance({
         stationId: '20093002',
         sourceId: 'meteofrance_20093002',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
       makeSource('meteofrance_20107001', defaultPollMs, () => fetchMeteoFrance({
         stationId: '20107001',
         sourceId: 'meteofrance_20107001',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
       makeSource('meteofrance_20342001', defaultPollMs, () => fetchMeteoFrance({
         stationId: '20342001',
         sourceId: 'meteofrance_20342001',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
       makeSource('meteofrance_20041001', defaultPollMs, () => fetchMeteoFrance({
         stationId: '20041001',
         sourceId: 'meteofrance_20041001',
         key: env.METEOFRANCE_KEY,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })),
     );
@@ -672,25 +721,25 @@ export function createRealWeatherSources({
     makeSource('pioupiou_1202', fastPollMs, () => fetchPioupiou({
       sourceId: 'pioupiou_1202',
       beaconId: '1202',
-      fetchImpl,
+      fetchImpl: timedFetch,
       clock,
     })),
     makeSource('candhis_revellata', defaultPollMs, () => fetchCandhis({
       sourceId: 'candhis_revellata',
       campaign: 'Y2FtcD0wMkIwNA==',
-      fetchImpl,
+      fetchImpl: timedFetch,
       clock,
     })),
     makeSource('candhis_bonifacio', defaultPollMs, () => fetchCandhis({
       sourceId: 'candhis_bonifacio',
       campaign: 'Y2FtcD0wMkEwMQ==',
-      fetchImpl,
+      fetchImpl: timedFetch,
       clock,
     })),
     makeSource('candhis_alistro', defaultPollMs, () => fetchCandhis({
       sourceId: 'candhis_alistro',
       campaign: 'Y2FtcD0wMkIwNQ==',
-      fetchImpl,
+      fetchImpl: timedFetch,
       clock,
     })),
     makeSource('esurfmar_ajaccio', defaultPollMs, async () => {
@@ -700,7 +749,7 @@ export function createRealWeatherSources({
             sourceId: 'esurfmar_ajaccio',
             buoyId: '6101031',
             key: env.METEOFRANCE_KEY,
-            fetchImpl,
+            fetchImpl: timedFetch,
             clock,
           });
         } catch (err) {
@@ -711,14 +760,14 @@ export function createRealWeatherSources({
       return fetchESurfmar({
         sourceId: 'esurfmar_ajaccio',
         slug: 'ajaccio',
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       });
     }),
     makeSource('esurfmar_calvi', defaultPollMs, () => fetchESurfmar({
       sourceId: 'esurfmar_calvi',
       slug: 'calvi',
-      fetchImpl,
+      fetchImpl: timedFetch,
       clock,
     })),
   );
@@ -735,7 +784,7 @@ export function createRealWeatherSources({
       sourceId,
       stationId,
       apiKey: wundergroundKey,
-      fetchImpl,
+      fetchImpl: timedFetch,
       clock,
     })));
   }
@@ -755,7 +804,7 @@ export function createRealWeatherSources({
         spotId,
         user: env.WINDSUP_USER,
         password: env.WINDSUP_PASS,
-        fetchImpl,
+        fetchImpl: timedFetch,
         clock,
       })));
     }

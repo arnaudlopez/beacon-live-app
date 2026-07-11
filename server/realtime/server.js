@@ -54,7 +54,13 @@ export async function createWeatherService({
   env = globalThis.process?.env ?? {},
   fetchImpl = globalThis.fetch,
   sources = sourceMode === 'real'
-    ? createRealWeatherSources({ clock, env, fetchImpl, pollMs: intervalMs })
+    ? createRealWeatherSources({
+        clock,
+        env,
+        fetchImpl,
+        pollMs: intervalMs,
+        requestTimeoutMs: Number(env.WEATHER_REQUEST_TIMEOUT_MS || 15_000),
+      })
     : createDemoWeatherSources({ clock, pollMs: intervalMs }),
 } = {}) {
   const store = createFileWeatherStore({ filePath: storePath, maxObservations });

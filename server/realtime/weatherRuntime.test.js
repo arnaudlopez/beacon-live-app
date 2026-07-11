@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { createRealWeatherSources } from './realSources.js';
 import { createWeatherRuntime } from './weatherRuntime.js';
 
 function makeClock(start = '2026-05-25T08:00:00.000Z') {
@@ -116,6 +117,54 @@ describe('weather runtime realtime contract', () => {
       status: 'ok',
       consecutiveFailures: 0,
     });
+  });
+
+  it('records malformed provider data and continues polling later sources', async () => {
+    const clock = makeClock();
+    const fetchImpl = vi.fn((url) => {
+      if (url.includes('/observations/current')) {
+        return Promise.resolve(new Response('', { status: 200 }));
+      }
+      if (url.includes('/observations/all/1day')) {
+        return Promise.resolve(new Response(JSON.stringify({ observations: [] })));
+      }
+      return Promise.reject(new Error(`unexpected_url:${url}`));
+    });
+    const wunderground = createRealWeatherSources({
+      clock,
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((source) => source.id === 'wunderground_IGROSS105');
+    const laterSource = {
+      id: 'windsup_porticcio',
+      pollMs: 20_000,
+      fetch: vi.fn().mockResolvedValue(reading('windsup_porticcio', '2026-05-25T08:00:00.000Z', 12)),
+    };
+    const store = {
+      saveSnapshot: vi.fn().mockResolvedValue(undefined),
+      appendObservation: vi.fn().mockResolvedValue(undefined),
+    };
+    const runtime = createWeatherRuntime({ clock, sources: [wunderground, laterSource], store });
+
+    await expect(runtime.pollDueSources()).resolves.toHaveLength(1);
+
+    const snapshot = runtime.getSnapshot();
+    expect(snapshot.sourceHealth.wunderground_IGROSS105).toMatchObject({
+      status: 'error',
+      consecutiveFailures: 1,
+      lastErrorMessage: 'upstream_invalid_json_empty_body',
+    });
+    expect(snapshot.sourceHealth.windsup_porticcio).toMatchObject({
+      status: 'ok',
+      consecutiveFailures: 0,
+    });
+    expect(snapshot.windData.porticcio.live.windSpeed).toBe(12);
+    expect(store.saveSnapshot).toHaveBeenCalledWith(expect.objectContaining({
+      sourceHealth: expect.objectContaining({
+        wunderground_IGROSS105: expect.objectContaining({ status: 'error' }),
+        windsup_porticcio: expect.objectContaining({ status: 'ok' }),
+      }),
+    }));
   });
 
   it('routes all dashboard source families into their UI buckets', async () => {

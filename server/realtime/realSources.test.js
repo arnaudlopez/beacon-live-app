@@ -435,4 +435,38 @@ describe('real weather source adapters', () => {
     expect(fetchImpl.mock.calls[1][0]).toBe('https://www.winds-up.com/v2/');
     expect(fetchImpl.mock.calls[2][0]).toBe('https://www.winds-up.com/spot/1726');
   });
+
+  it('turns an empty Wunderground response into a normal source rejection', async () => {
+    const fetchImpl = vi.fn((url) => {
+      if (url.includes('/observations/current')) {
+        return Promise.resolve(new Response('', { status: 200 }));
+      }
+      if (url.includes('/observations/all/1day')) {
+        return new Promise((resolve) => {
+          setTimeout(() => resolve(new Response(JSON.stringify({ observations: [] }))), 10);
+        });
+      }
+      return Promise.reject(new Error(`unexpected_url:${url}`));
+    });
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'wunderground_IGROSS105');
+
+    await expect(source.fetch()).rejects.toThrow('upstream_invalid_json_empty_body');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it('bounds an upstream request that never settles', async () => {
+    const fetchImpl = vi.fn(() => new Promise(() => {}));
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      fetchImpl,
+      pollMs: 20_000,
+      requestTimeoutMs: 10,
+    }).find((item) => item.id === 'wunderground_IGROSS105');
+
+    await expect(source.fetch()).rejects.toThrow('upstream_timeout_10ms');
+  });
 });

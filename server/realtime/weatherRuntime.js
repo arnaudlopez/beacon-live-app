@@ -162,7 +162,9 @@ export function createWeatherRuntime({
     snapshot.sourceHealth[source.id] = {
       status: 'unknown',
       consecutiveFailures: 0,
+      lastAttemptAt: null,
       lastSuccessAt: null,
+      lastObservedAt: null,
       lastErrorAt: null,
       lastErrorMessage: null,
       nextPollAt: new Date(0).toISOString(),
@@ -300,7 +302,9 @@ export function createWeatherRuntime({
       updateHealth(source.id, {
         status: 'ok',
         consecutiveFailures: 0,
+        lastAttemptAt: receivedAt,
         lastSuccessAt: receivedAt,
+        lastObservedAt: result.observedAt ?? null,
         lastErrorMessage: null,
         nextPollAt: new Date(sourceState.nextPollAt).toISOString(),
       });
@@ -324,6 +328,7 @@ export function createWeatherRuntime({
       updateHealth(source.id, {
         status: 'error',
         consecutiveFailures: sourceState.consecutiveFailures,
+        lastAttemptAt: new Date(now).toISOString(),
         lastErrorAt: new Date(now).toISOString(),
         lastErrorMessage: error instanceof Error ? error.message : String(error),
         nextPollAt: new Date(sourceState.nextPollAt).toISOString(),
