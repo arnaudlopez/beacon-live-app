@@ -13,6 +13,22 @@ describe('source availability', () => {
     }, NOW)).toBe(false);
   });
 
+  it('keeps delayed observations available until the 48-hour limit', () => {
+    expect(isSourceAvailable(parata, {
+      live: { windSpeed: '7.2', windGust: '9.1' },
+      observedAt: '2026-07-21T07:00:00.000Z',
+      history: [],
+    }, NOW)).toBe(true);
+  });
+
+  it('becomes unavailable at exactly 48 hours without a measurement', () => {
+    expect(isSourceAvailable(parata, {
+      live: { windSpeed: '7.2', windGust: '9.1' },
+      observedAt: '2026-07-19T09:00:00.000Z',
+      history: [],
+    }, NOW)).toBe(false);
+  });
+
   it('rejects undated live values instead of presenting them as current', () => {
     expect(isSourceAvailable(parata, {
       live: { windSpeed: '7.2', windGust: '9.1' },

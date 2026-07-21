@@ -1,4 +1,4 @@
-import { staleThresholdForSource } from './healthStatus.js';
+import { SOURCE_UNAVAILABLE_AFTER_MS } from './healthStatus.js';
 
 const WIND_SOURCE_MAP = {
   meteofrance_20004002: 'lfkj',
@@ -146,9 +146,9 @@ function removeSourcePayload(snapshot, sourceId) {
   if (esurfmarSpotId) delete snapshot.surfData[esurfmarSpotId];
 }
 
-function isStaleObservation(sourceId, observedAt, now) {
+function isUnavailableObservation(observedAt, now) {
   const observedTime = toTimestamp(observedAt);
-  return observedTime !== null && now - observedTime > staleThresholdForSource(sourceId);
+  return observedTime !== null && now - observedTime >= SOURCE_UNAVAILABLE_AFTER_MS;
 }
 
 export function createWeatherRuntime({
@@ -201,7 +201,7 @@ export function createWeatherRuntime({
       nextPollAt: new Date(0).toISOString(),
       ...initialHealth,
     };
-    if (isStaleObservation(source.id, initialHealth?.lastObservedAt, clock.now())) {
+    if (isUnavailableObservation(initialHealth?.lastObservedAt, clock.now())) {
       snapshot.sourceHealth[source.id].status = 'stale';
       sourceState.hash = null;
       removeSourcePayload(snapshot, source.id);
@@ -335,7 +335,7 @@ export function createWeatherRuntime({
       const previousFailures = sourceState.consecutiveFailures;
       sourceState.consecutiveFailures = 0;
       const receivedAt = new Date(now).toISOString();
-      if (isStaleObservation(source.id, reading?.observedAt, now)) {
+      if (isUnavailableObservation(reading?.observedAt, now)) {
         sourceState.hash = null;
         removeSourcePayload(snapshot, source.id);
         updateHealth(source.id, {

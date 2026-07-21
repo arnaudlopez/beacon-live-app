@@ -126,14 +126,14 @@ describe('weather runtime realtime contract', () => {
       id: 'meteofrance_20004003',
       pollMs: 60_000,
       fetch: vi.fn().mockResolvedValue(
-        reading('meteofrance_20004003', '2026-05-25T05:00:00.000Z', 18),
+        reading('meteofrance_20004003', '2026-05-23T08:00:00.000Z', 18),
       ),
     };
     const runtime = createWeatherRuntime({
       clock,
       sources: [source],
       initialSnapshot: {
-        windData: { la_parata: reading('old', '2026-05-25T05:00:00.000Z', 18).payload },
+        windData: { la_parata: reading('old', '2026-05-23T08:00:00.000Z', 18).payload },
         sourceHealth: {},
       },
     });
@@ -144,7 +144,26 @@ describe('weather runtime realtime contract', () => {
     expect(runtime.getSnapshot().sourceHealth.meteofrance_20004003).toMatchObject({
       status: 'stale',
       consecutiveFailures: 0,
-      lastObservedAt: '2026-05-25T05:00:00.000Z',
+      lastObservedAt: '2026-05-23T08:00:00.000Z',
+    });
+  });
+
+  it('keeps observations visible when they are delayed by two hours', async () => {
+    const clock = makeClock();
+    const source = {
+      id: 'meteofrance_20004003',
+      pollMs: 60_000,
+      fetch: vi.fn().mockResolvedValue(
+        reading('meteofrance_20004003', '2026-05-25T06:00:00.000Z', 12),
+      ),
+    };
+    const runtime = createWeatherRuntime({ clock, sources: [source] });
+
+    await runtime.pollDueSources();
+
+    expect(runtime.getSnapshot().windData.la_parata).toMatchObject({
+      observedAt: '2026-05-25T06:00:00.000Z',
+      live: { windSpeed: 12, windGust: 16 },
     });
   });
 

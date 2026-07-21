@@ -1,5 +1,7 @@
 const MINUTE_MS = 60_000;
 
+export const SOURCE_UNAVAILABLE_AFTER_MS = 48 * 60 * MINUTE_MS;
+
 const SOURCE_STALE_THRESHOLDS = [
   [/^meteofrance_/, 90 * MINUTE_MS],
   [/^(candhis_|esurfmar_)/, 3 * 60 * MINUTE_MS],
