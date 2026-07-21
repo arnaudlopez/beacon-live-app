@@ -81,6 +81,36 @@ const WindCompass = React.memo(({ direction, delay }) => {
   );
 });
 
+export function SourceSelector({ sources, windData, activeSourceId, isLoading, onSourceSelect }) {
+  return (
+    <nav className="source-toggle-container" aria-label="Sélection de station">
+      {sources.map((source) => {
+        const isUnavailable = !isLoading && !windData[source.id]?.live;
+        const label = isUnavailable
+          ? `${source.name} — indisponible temporairement`
+          : source.name;
+
+        return (
+          <button
+            key={source.id}
+            className={`source-toggle-btn source-toggle-btn-with-status ${activeSourceId === source.id ? 'active' : ''} ${isUnavailable ? 'unavailable' : ''}`}
+            onClick={() => onSourceSelect(source)}
+            disabled={isLoading || isUnavailable}
+            aria-label={label}
+            aria-pressed={activeSourceId === source.id}
+            title={isUnavailable ? 'Cette station ne transmet momentanément plus de données.' : undefined}
+          >
+            <span className="source-name">{source.name}</span>
+            {isUnavailable && (
+              <span className="source-unavailable-label">Indisponible temporairement</span>
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
+}
+
 // --- Main Dashboard ---
 
 export default function Dashboard() {
@@ -178,19 +208,13 @@ export default function Dashboard() {
         <h1 className="dashboard-title">🌊 Beacon Live</h1>
       </header>
 
-      <nav className="source-toggle-container" aria-label="Sélection de station">
-        {SOURCES.map(source => (
-          <button
-            key={source.id}
-            className={`source-toggle-btn ${displaySource.id === source.id ? 'active' : ''}`}
-            onClick={() => setActiveSource(source)}
-            disabled={isLoading}
-            aria-pressed={displaySource.id === source.id}
-          >
-            {source.name}
-          </button>
-        ))}
-      </nav>
+      <SourceSelector
+        sources={SOURCES}
+        windData={windData}
+        activeSourceId={displaySource.id}
+        isLoading={isLoading}
+        onSourceSelect={setActiveSource}
+      />
 
       <div className="alert-bar glass-panel" role="region" aria-label="Paramètres d'alerte">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>

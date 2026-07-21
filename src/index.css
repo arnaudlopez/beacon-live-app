@@ -373,6 +373,38 @@ body::before {
   font-weight: 700;
 }
 
+.source-toggle-btn-with-status {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.15rem;
+}
+
+.source-toggle-btn-with-status.unavailable,
+.source-toggle-btn-with-status.unavailable:hover {
+  background: rgba(255, 255, 255, 0.025);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-secondary);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.source-toggle-btn-with-status.unavailable .source-name {
+  opacity: 0.55;
+}
+
+.source-unavailable-label {
+  color: var(--accent-orange);
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 500;
+  line-height: 1.1;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
 /* === SURF MAP & SWELL === */
 .map-marker {
   filter: drop-shadow(0 0 5px var(--accent-cyan));
