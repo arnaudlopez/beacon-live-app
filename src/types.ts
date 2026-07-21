@@ -30,6 +30,7 @@ export interface HistoryPoint {
 export interface WindData {
   live: WindLive;
   history: HistoryPoint[];
+  observedAt?: string;
 }
 
 export interface SurfPoint {

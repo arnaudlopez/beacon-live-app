@@ -7,6 +7,7 @@ import { useWeatherData } from '../hooks/useWeatherData';
 import { useNotifications } from '../hooks/useNotifications';
 import { SOURCES } from '../config/sources';
 import { getBeaufort, degToCardinal } from '../utils/beaufort';
+import { isSourceAvailable, latestObservationTime } from '../utils/sourceAvailability';
 
 // Lazy-loaded heavy map components (Leaflet ~200KB)
 const WindMapWidget = lazy(() => import('./WindMapWidget'));
@@ -85,7 +86,7 @@ export function SourceSelector({ sources, windData, activeSourceId, isLoading, o
   return (
     <nav className="source-toggle-container" aria-label="Sélection de station">
       {sources.map((source) => {
-        const isUnavailable = !isLoading && !windData[source.id]?.live;
+        const isUnavailable = !isLoading && !isSourceAvailable(source, windData[source.id]);
         const label = isUnavailable
           ? `${source.name} — indisponible temporairement`
           : source.name;
@@ -133,9 +134,9 @@ export default function Dashboard() {
   const notifications = useNotifications(windData);
 
   const fallbackSource = useMemo(() => {
-    if (isLoading || windData[activeSource.id]?.live) return null;
-    return SOURCES.find(source => windData[source.id]?.live) || null;
-  }, [activeSource.id, isLoading, windData]);
+    if (isLoading || isSourceAvailable(activeSource, windData[activeSource.id])) return null;
+    return SOURCES.find(source => isSourceAvailable(source, windData[source.id])) || null;
+  }, [activeSource, isLoading, windData]);
 
   const displaySource = fallbackSource || activeSource;
 
@@ -167,6 +168,11 @@ export default function Dashboard() {
     }
     return mergedHistory;
   }, [windData, displaySource.id, waterData]);
+
+  const observationTime = useMemo(
+    () => latestObservationTime(windData[displaySource.id]),
+    [displaySource.id, windData],
+  );
 
   // Persist active source
   useEffect(() => {
@@ -206,6 +212,11 @@ export default function Dashboard() {
           {displaySource.name}
         </div>
         <h1 className="dashboard-title">🌊 Beacon Live</h1>
+        {observationTime !== null && (
+          <div className="source-observation-time">
+            Mesure du {format(new Date(observationTime), 'dd/MM à HH:mm')}
+          </div>
+        )}
       </header>
 
       <SourceSelector
@@ -305,7 +316,13 @@ export default function Dashboard() {
             <WindMapWidget allWindData={windData} activeSourceId={displaySource.id} sources={SOURCES} onSourceSelect={setActiveSource} />
           </Suspense>
 
-          <HistoricalChart data={historyData} />
+          {historyData.length >= 2 ? (
+            <HistoricalChart data={historyData} />
+          ) : (
+            <div className="history-pending glass-panel" role="status">
+              Première mesure reçue — historique en cours de constitution.
+            </div>
+          )}
 
           <div className="widgets-grid" style={{ marginTop: '1.5rem' }}>
             <DataWidget icon={Wind} title="Vent moyen" value={weatherData.windSpeed} unit="kts" delay={0.05} valueColor={getBeaufort(weatherData.windSpeed).color} />

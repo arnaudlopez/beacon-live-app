@@ -94,6 +94,12 @@ body::before {
   letter-spacing: -0.03em;
 }
 
+.source-observation-time {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-top: 0.15rem;
+}
+
 .dashboard-subtitle {
   color: var(--accent-cyan);
   font-size: 0.95rem;
@@ -403,6 +409,13 @@ body::before {
   line-height: 1.1;
   opacity: 0.8;
   white-space: nowrap;
+}
+
+.history-pending {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  text-align: center;
 }
 
 /* === SURF MAP & SWELL === */

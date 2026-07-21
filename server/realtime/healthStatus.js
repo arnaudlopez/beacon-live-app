@@ -29,6 +29,7 @@ export function classifySourceHealth(sourceId, health = {}, now = Date.now()) {
   let status = 'unknown';
 
   if (health.status === 'error') status = 'error';
+  else if (health.status === 'stale') status = 'stale';
   else if (health.status === 'ok' && observationAgeMs === null) status = 'unavailable';
   else if (health.status === 'ok' && observationAgeMs > staleAfterMs) status = 'stale';
   else if (health.status === 'ok') status = 'healthy';

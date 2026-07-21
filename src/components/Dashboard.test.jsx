@@ -8,8 +8,8 @@ import { SourceSelector } from './Dashboard';
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const sources = [
-  { id: 'lfkj', name: "Ajaccio - Campo dell'Oro" },
-  { id: 'la_parata', name: 'Ajaccio - La Parata' },
+  { id: 'lfkj', name: "Ajaccio - Campo dell'Oro", type: 'meteofrance' },
+  { id: 'la_parata', name: 'Ajaccio - La Parata', type: 'meteofrance' },
 ];
 
 let container;
@@ -33,7 +33,7 @@ function renderSelector(props = {}) {
     root.render(
       <SourceSelector
         sources={sources}
-        windData={{ lfkj: { live: { windSpeed: 10 } } }}
+        windData={{ lfkj: { live: { windSpeed: 10 }, history: [{ time: Date.now() }] } }}
         activeSourceId="lfkj"
         isLoading={false}
         onSourceSelect={vi.fn()}
@@ -62,6 +62,22 @@ describe('SourceSelector', () => {
     expect(campoButton.disabled).toBe(false);
     act(() => campoButton.click());
     expect(onSourceSelect).toHaveBeenCalledWith(sources[0]);
+  });
+
+  it('disables stale live values when no current observation can be proven', () => {
+    const [, parataButton] = renderSelector({
+      windData: {
+        lfkj: { live: { windSpeed: 10 }, history: [{ time: Date.now() }] },
+        la_parata: {
+          live: { windSpeed: 7.2, windGust: 9.1 },
+          observedAt: '2026-07-18T04:00:00.000Z',
+          history: [],
+        },
+      },
+    });
+
+    expect(parataButton.disabled).toBe(true);
+    expect(parataButton.textContent).toContain('Indisponible temporairement');
   });
 
   it('does not announce stations as unavailable while data is loading', () => {

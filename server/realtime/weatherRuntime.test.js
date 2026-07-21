@@ -61,6 +61,7 @@ describe('weather runtime realtime contract', () => {
       sources: ['windsup_porticcio'],
     });
     expect(update.data.windData.porticcio.live.windSpeed).toBe(14);
+    expect(update.data.windData.porticcio.observedAt).toBe('2026-05-25T08:00:20.000Z');
     expect(update.latencyMs).toBeLessThanOrEqual(30_000);
   });
 
@@ -117,6 +118,50 @@ describe('weather runtime realtime contract', () => {
       status: 'ok',
       consecutiveFailures: 0,
     });
+  });
+
+  it('quarantines stale observations instead of exposing them as current data', async () => {
+    const clock = makeClock();
+    const source = {
+      id: 'meteofrance_20004003',
+      pollMs: 60_000,
+      fetch: vi.fn().mockResolvedValue(
+        reading('meteofrance_20004003', '2026-05-25T05:00:00.000Z', 18),
+      ),
+    };
+    const runtime = createWeatherRuntime({
+      clock,
+      sources: [source],
+      initialSnapshot: {
+        windData: { la_parata: reading('old', '2026-05-25T05:00:00.000Z', 18).payload },
+        sourceHealth: {},
+      },
+    });
+
+    await runtime.pollDueSources();
+
+    expect(runtime.getSnapshot().windData.la_parata).toBeUndefined();
+    expect(runtime.getSnapshot().sourceHealth.meteofrance_20004003).toMatchObject({
+      status: 'stale',
+      consecutiveFailures: 0,
+      lastObservedAt: '2026-05-25T05:00:00.000Z',
+    });
+  });
+
+  it('purges explicitly disabled source payloads from a persisted snapshot', () => {
+    const clock = makeClock();
+    const runtime = createWeatherRuntime({
+      clock,
+      sources: [],
+      disabledSourceIds: ['wunderground_ISARTN1'],
+      initialSnapshot: {
+        windData: { tizzano: reading('old', '2026-05-20T08:00:00.000Z', 8).payload },
+        sourceHealth: { wunderground_ISARTN1: { status: 'error', consecutiveFailures: 10 } },
+      },
+    });
+
+    expect(runtime.getSnapshot().windData.tizzano).toBeUndefined();
+    expect(runtime.getSnapshot().sourceHealth.wunderground_ISARTN1).toBeUndefined();
   });
 
   it('records malformed provider data and continues polling later sources', async () => {

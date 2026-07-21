@@ -28,6 +28,13 @@ describe('backend health classification', () => {
     }, NOW).status).toBe('error');
   });
 
+  it('preserves an explicit stale state set by the weather runtime', () => {
+    expect(classifySourceHealth('meteofrance_20004003', {
+      status: 'stale',
+      lastObservedAt: '2026-07-08T04:00:00.000Z',
+    }, NOW).status).toBe('stale');
+  });
+
   it('reports degraded provider counts without failing core readiness', () => {
     const snapshot = {
       checkedAt: '2026-07-11T12:59:30.000Z',

@@ -1,3 +1,5 @@
+import { staleThresholdForSource } from './healthStatus.js';
+
 const WIND_SOURCE_MAP = {
   meteofrance_20004002: 'lfkj',
   meteofrance_20004003: 'la_parata',
@@ -98,6 +100,9 @@ function mergeWindPayloadHistory({ previousPayload, nextPayload, observedAt, now
   const payload = clone(nextPayload);
   if (!payload || typeof payload !== 'object') return payload;
 
+  const observedTime = toTimestamp(observedAt);
+  if (observedTime !== null) payload.observedAt = new Date(observedTime).toISOString();
+
   payload.history = mergeHistoryPoints({
     previousHistory: previousPayload?.history,
     nextHistory: payload.history,
@@ -128,12 +133,31 @@ function createSnapshot(clock, initialSnapshot) {
   };
 }
 
+function removeSourcePayload(snapshot, sourceId) {
+  const windSourceId = WIND_SOURCE_MAP[sourceId];
+  if (windSourceId) delete snapshot.windData[windSourceId];
+  else delete snapshot.windData[sourceId];
+
+  const candhisSpotId = CANDHIS_SOURCE_MAP[sourceId];
+  if (candhisSpotId) delete snapshot.surfData[candhisSpotId];
+  if (sourceId === 'candhis_revellata') snapshot.waterData = null;
+
+  const esurfmarSpotId = ESURFMAR_SOURCE_MAP[sourceId];
+  if (esurfmarSpotId) delete snapshot.surfData[esurfmarSpotId];
+}
+
+function isStaleObservation(sourceId, observedAt, now) {
+  const observedTime = toTimestamp(observedAt);
+  return observedTime !== null && now - observedTime > staleThresholdForSource(sourceId);
+}
+
 export function createWeatherRuntime({
   clock,
   sources,
   initialSnapshot,
   store,
   historyRetentionMs = DEFAULT_HISTORY_RETENTION_MS,
+  disabledSourceIds = [],
 }) {
   if (!clock || typeof clock.now !== 'function') {
     throw new Error('createWeatherRuntime requires a clock with now()');
@@ -145,6 +169,11 @@ export function createWeatherRuntime({
   const sourceStates = new Map();
   const subscribers = new Set();
   const snapshot = createSnapshot(clock, initialSnapshot);
+
+  for (const sourceId of disabledSourceIds) {
+    delete snapshot.sourceHealth[sourceId];
+    removeSourcePayload(snapshot, sourceId);
+  }
 
   for (const source of sources) {
     const sourceState = createInitialSourceState();
@@ -172,6 +201,11 @@ export function createWeatherRuntime({
       nextPollAt: new Date(0).toISOString(),
       ...initialHealth,
     };
+    if (isStaleObservation(source.id, initialHealth?.lastObservedAt, clock.now())) {
+      snapshot.sourceHealth[source.id].status = 'stale';
+      sourceState.hash = null;
+      removeSourcePayload(snapshot, source.id);
+    }
   }
 
   function notify(event) {
@@ -298,10 +332,24 @@ export function createWeatherRuntime({
 
     try {
       const reading = await source.fetch();
-      const result = mergeReading(source.id, sourceState, reading);
       const previousFailures = sourceState.consecutiveFailures;
       sourceState.consecutiveFailures = 0;
       const receivedAt = new Date(now).toISOString();
+      if (isStaleObservation(source.id, reading?.observedAt, now)) {
+        sourceState.hash = null;
+        removeSourcePayload(snapshot, source.id);
+        updateHealth(source.id, {
+          status: 'stale',
+          consecutiveFailures: 0,
+          lastAttemptAt: receivedAt,
+          lastSuccessAt: receivedAt,
+          lastObservedAt: reading.observedAt,
+          lastErrorMessage: null,
+          nextPollAt: new Date(sourceState.nextPollAt).toISOString(),
+        });
+        return null;
+      }
+      const result = mergeReading(source.id, sourceState, reading);
       updateHealth(source.id, {
         status: 'ok',
         consecutiveFailures: 0,
