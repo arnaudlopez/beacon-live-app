@@ -23,9 +23,11 @@ WEATHER_SOURCE_MODE=real
 WEATHER_POLL_MS=20000
 WEATHER_HEARTBEAT_MS=15000
 WEATHER_REQUEST_TIMEOUT_MS=15000
+WEATHER_DISABLED_SOURCE_IDS=wunderground_ISARTN1
 METEOFRANCE_KEY=VOTRE_CLE_METEOFRANCE
-WINDSUP_USER=VOTRE_LOGIN_WINDSUP
-WINDSUP_PASS=VOTRE_MOT_DE_PASSE_WINDSUP
+WINDSUP_PREMIUM_ENABLED=false
+WINDSUP_USER=
+WINDSUP_PASS=
 WUNDERGROUND_API_KEY=
 VAPID_PUBLIC_KEY=VOTRE_CLE_PUBLIQUE_VAPID
 VAPID_PRIVATE_KEY=VOTRE_CLE_PRIVEE_VAPID
@@ -40,6 +42,18 @@ WEATHER_READY_MAX_AGE_MS=300000
 
 `WEATHER_SOURCE_MODE=real` active les adaptateurs météo Node côté `weather-api`.
 
+Par défaut, les relevés WindsUp publics, décalés de deux heures par le fournisseur, sont lus directement depuis les pages des spots. Aucun identifiant WindsUp n'est nécessaire dans ce mode.
+
+Pour réactiver les relevés premium en temps réel, configurez le compte dans Portainer puis redéployez :
+
+```env
+WINDSUP_PREMIUM_ENABLED=true
+WINDSUP_USER=VOTRE_LOGIN_WINDSUP
+WINDSUP_PASS=VOTRE_MOT_DE_PASSE_WINDSUP
+```
+
+Le backend partage une seule session premium entre tous les spots. Si la connexion premium expire ou échoue, il repasse automatiquement sur les relevés publics et limite les nouvelles tentatives de connexion.
+
 Variables à ajouter dans Portainer :
 
 - `VITE_WEATHER_BACKEND_URL=/api`
@@ -48,8 +62,8 @@ Variables à ajouter dans Portainer :
 - `WEATHER_HEARTBEAT_MS=15000`
 - `WEATHER_REQUEST_TIMEOUT_MS=15000`
 - `METEOFRANCE_KEY`
-- `WINDSUP_USER`
-- `WINDSUP_PASS`
+- `WINDSUP_PREMIUM_ENABLED=false` pour les relevés publics décalés, `true` pour le temps réel premium
+- `WINDSUP_USER` et `WINDSUP_PASS` lorsque le mode premium est activé
 - `WUNDERGROUND_API_KEY` optionnel, le backend garde une clé de compatibilité serveur si cette variable est vide.
 - `VAPID_PUBLIC_KEY`
 - `VAPID_PRIVATE_KEY`

@@ -24,9 +24,11 @@ describe('realtime Docker deployment config', () => {
     expect(compose).toContain('WEATHER_STORE_PATH=/data/weather-state.json');
     expect(compose).toContain('WEATHER_SOURCE_MODE=${WEATHER_SOURCE_MODE:-real}');
     expect(compose).toContain('METEOFRANCE_KEY=${METEOFRANCE_KEY:-}');
+    expect(compose).toContain('WINDSUP_PREMIUM_ENABLED=${WINDSUP_PREMIUM_ENABLED:-false}');
     expect(compose).toContain('WINDSUP_USER=${WINDSUP_USER:-}');
     expect(compose).toContain('WINDSUP_PASS=${WINDSUP_PASS:-}');
     expect(compose).toContain('WEATHER_MAX_OBSERVATIONS=${WEATHER_MAX_OBSERVATIONS:-500}');
+    expect(compose).toContain('WEATHER_DISABLED_SOURCE_IDS=${WEATHER_DISABLED_SOURCE_IDS:-wunderground_ISARTN1}');
     expect(compose).toContain('WEATHER_REQUEST_TIMEOUT_MS=${WEATHER_REQUEST_TIMEOUT_MS:-15000}');
     expect(compose).toContain('WEATHER_READY_MAX_AGE_MS=${WEATHER_READY_MAX_AGE_MS:-300000}');
     expect(compose).toContain('SENTRY_DSN=${SENTRY_DSN:-}');
@@ -54,8 +56,9 @@ describe('realtime Docker deployment config', () => {
     expect(docs).toContain('VITE_WEATHER_BACKEND_URL=/api');
     expect(docs).toContain('WEATHER_SOURCE_MODE=real');
     expect(docs).toContain('METEOFRANCE_KEY');
-    expect(docs).toContain('WINDSUP_USER');
-    expect(docs).toContain('WINDSUP_PASS');
+    expect(docs).toContain('décalés de deux heures');
+    expect(docs).toContain('WINDSUP_PREMIUM_ENABLED=true');
+    expect(docs).toContain('une seule session premium');
     expect(docs).toContain('/api/health');
     expect(docs).toContain('WEATHER_POLL_MS');
     expect(docs).toContain('WEATHER_MAX_OBSERVATIONS=500');
@@ -68,9 +71,11 @@ describe('realtime Docker deployment config', () => {
     expect(envExample).toContain('WEATHER_SOURCE_MODE=real');
     expect(envExample).toContain('WEATHER_MAX_OBSERVATIONS=500');
     expect(envExample).toContain('WEATHER_REQUEST_TIMEOUT_MS=15000');
+    expect(envExample).toContain('WEATHER_DISABLED_SOURCE_IDS=wunderground_ISARTN1');
     expect(envExample).toContain('SENTRY_DSN=');
     expect(envExample).toContain('MONITOR_HEARTBEAT_URL=');
     expect(envExample).toContain('METEOFRANCE_KEY=');
+    expect(envExample).toContain('WINDSUP_PREMIUM_ENABLED=false');
     expect(envExample).toContain('WINDSUP_USER=');
     expect(envExample).toContain('WINDSUP_PASS=');
     expect(envExample).not.toContain('VITE_METEOFRANCE_KEY');

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import webpush from 'web-push';
 import { createDemoWeatherSources } from './demoSources.js';
-import { createRealWeatherSources } from './realSources.js';
+import { createRealWeatherSources, parseDisabledSourceIds } from './realSources.js';
 import { createWeatherApiServer } from './weatherApiServer.js';
 import { createWeatherRuntime } from './weatherRuntime.js';
 import { createWeatherScheduler } from './weatherScheduler.js';
@@ -72,6 +72,9 @@ export async function createWeatherService({
     sources,
     initialSnapshot: persisted.snapshot,
     store,
+    disabledSourceIds: sourceMode === 'real'
+      ? parseDisabledSourceIds(env.WEATHER_DISABLED_SOURCE_IDS)
+      : [],
   });
   const vapidPublicKey = env.VAPID_PUBLIC_KEY || '';
   const vapidPrivateKey = env.VAPID_PRIVATE_KEY || '';

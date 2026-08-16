@@ -80,7 +80,7 @@ describe('weather API server contract', () => {
         .mockResolvedValueOnce(reading('2026-05-25T08:00:20.000Z', 15)),
     };
     const runtime = createWeatherRuntime({ clock, sources: [source] });
-    const server = createWeatherApiServer({ runtime });
+    const server = createWeatherApiServer({ runtime, clock });
     const baseUrl = await listen(server);
 
     try {
@@ -211,7 +211,7 @@ describe('weather API server contract', () => {
 
   it('separates liveness, readiness, and provider degradation', async () => {
     const clock = makeClock();
-    const source = {
+    const staleSource = {
       id: 'esurfmar_calvi',
       pollMs: 60_000,
       fetch: vi.fn().mockResolvedValue({
@@ -224,7 +224,16 @@ describe('weather API server contract', () => {
         },
       }),
     };
-    const runtime = createWeatherRuntime({ clock, sources: [source] });
+    const healthySource = {
+      id: 'windsup_porticcio',
+      pollMs: 20_000,
+      fetch: vi.fn().mockResolvedValue({
+        source: 'windsup_porticcio',
+        observedAt: '2026-05-25T08:00:00.000Z',
+        payload: { live: { windSpeed: 10, windGust: 14, windDirection: 270 }, history: [] },
+      }),
+    };
+    const runtime = createWeatherRuntime({ clock, sources: [staleSource, healthySource] });
     const server = createWeatherApiServer({ runtime, clock, readinessMaxAgeMs: 300_000 });
     const baseUrl = await listen(server);
 
@@ -250,6 +259,12 @@ describe('weather API server contract', () => {
       await expect(providersResponse.json()).resolves.toMatchObject({
         status: 'degraded',
         counts: { stale: 1 },
+      });
+
+      const healthResponse = await fetch(`${baseUrl}/api/health`);
+      await expect(healthResponse.json()).resolves.toMatchObject({
+        status: 'degraded',
+        providers: { status: 'degraded', counts: { stale: 1 } },
       });
     } finally {
       await new Promise((resolve) => server.close(resolve));

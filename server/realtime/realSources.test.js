@@ -17,13 +17,11 @@ function makeClock(start = '2026-05-25T08:00:00.000Z') {
 }
 
 describe('real weather source adapters', () => {
-  it('builds the Portainer-ready real source list with credential-gated providers', () => {
+  it('builds the Portainer-ready real source list with public WindsUp sources', () => {
     const sources = createRealWeatherSources({
       clock: makeClock(),
       env: {
         METEOFRANCE_KEY: 'mf-key',
-        WINDSUP_USER: 'porticcio-user',
-        WINDSUP_PASS: 'porticcio-pass',
       },
       fetchImpl: vi.fn(),
       pollMs: 20_000,
@@ -58,9 +56,10 @@ describe('real weather source adapters', () => {
     ]));
     expect(sources.find((source) => source.id === 'wunderground_ICORSEPR2').pollMs)
       .toBeGreaterThan(sources.find((source) => source.id === 'wunderground_IGROSS105').pollMs);
+    expect(sources.find((source) => source.id === 'windsup_tonnara').pollMs).toBe(120_000);
   });
 
-  it('does not include credential-gated sources when their Portainer env vars are missing', () => {
+  it('keeps public WindsUp sources when credential-gated provider variables are missing', () => {
     const sources = createRealWeatherSources({
       clock: makeClock(),
       env: {},
@@ -76,13 +75,15 @@ describe('real weather source adapters', () => {
     expect(ids).not.toContain('meteofrance_20107001');
     expect(ids).not.toContain('meteofrance_20342001');
     expect(ids).not.toContain('meteofrance_20041001');
-    expect(ids).not.toContain('windsup_porticcio');
-    expect(ids).not.toContain('windsup_tonnara');
-    expect(ids).not.toContain('windsup_porto_polo');
-    expect(ids).not.toContain('windsup_piantarella');
-    expect(ids).not.toContain('windsup_santa_manza');
-    expect(ids).not.toContain('windsup_balistra');
-    expect(ids).not.toContain('windsup_figari_eole');
+    expect(ids).toEqual(expect.arrayContaining([
+      'windsup_porticcio',
+      'windsup_tonnara',
+      'windsup_porto_polo',
+      'windsup_piantarella',
+      'windsup_santa_manza',
+      'windsup_balistra',
+      'windsup_figari_eole',
+    ]));
     expect(ids).toEqual(expect.arrayContaining([
       'pioupiou_1202',
       'candhis_revellata',
@@ -90,6 +91,20 @@ describe('real weather source adapters', () => {
       'esurfmar_ajaccio',
       'wunderground_IGROSS105',
     ]));
+  });
+
+  it('excludes explicitly disabled upstreams without changing stable source ids', () => {
+    const sources = createRealWeatherSources({
+      clock: makeClock(),
+      env: { WEATHER_DISABLED_SOURCE_IDS: 'wunderground_ISARTN1, meteofrance_20004003' },
+      fetchImpl: vi.fn(),
+      pollMs: 20_000,
+    });
+    const ids = sources.map((source) => source.id);
+
+    expect(ids).not.toContain('wunderground_ISARTN1');
+    expect(ids).not.toContain('meteofrance_20004003');
+    expect(ids).toContain('wunderground_IGROSS105');
   });
 
   it('parses representative upstream payloads into the existing dashboard data shape', () => {
@@ -395,28 +410,16 @@ describe('real weather source adapters', () => {
     });
   });
 
-  it('authenticates WindsUp through the current premium session flow', async () => {
-    const fetchImpl = vi.fn()
-      .mockResolvedValueOnce(new Response('', {
-        status: 302,
-        headers: { 'set-cookie': 'PHPSESSID=initial; Path=/' },
-      }))
-      .mockResolvedValueOnce(new Response('', {
-        status: 302,
-        headers: { 'set-cookie': 'codeCnx=code; Path=/, autolog=auto; Path=/' },
-      }))
-      .mockResolvedValueOnce(new Response(`
-        <div class="spotObsLine"><span>10:00</span><div class="deg">275</div></div>
-        {x:1779696000000,y:11,o:"O",color:"#fff",img:""}
-        {x:1779696000000,low:8,high:17}
-      `));
+  it('fetches the two-hour-delayed public WindsUp observations without authentication', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response(`
+      <div class="spotObsLine"><span>10:00</span><div class="deg">275</div></div>
+      {x:1779696000000,y:11,o:"O",color:"#fff",img:""}
+      {x:1779696000000,low:8,high:17}
+    `));
 
     const source = createRealWeatherSources({
       clock: makeClock(),
-      env: {
-        WINDSUP_USER: 'porticcio-user',
-        WINDSUP_PASS: 'porticcio-pass',
-      },
+      env: {},
       fetchImpl,
       pollMs: 20_000,
     }).find((item) => item.id === 'windsup_porticcio');
@@ -431,9 +434,107 @@ describe('real weather source adapters', () => {
         },
       },
     });
-    expect(fetchImpl.mock.calls[0][0]).toBe('https://www.winds-up.com/connexion');
-    expect(fetchImpl.mock.calls[1][0]).toBe('https://www.winds-up.com/v2/');
-    expect(fetchImpl.mock.calls[2][0]).toBe('https://www.winds-up.com/spot/1726');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    expect(fetchImpl.mock.calls[0][0]).toBe('https://www.winds-up.com/spot/1726');
+    expect(fetchImpl.mock.calls[0][1]).not.toHaveProperty('method');
+    expect(fetchImpl.mock.calls[0][1].headers).not.toHaveProperty('Cookie');
+  });
+
+  it('uses one shared premium session for realtime WindsUp observations when enabled', async () => {
+    const observationHtml = (time, speed) => `
+      <div class="spotObsLine"><span>10:00</span><div class="deg">275</div></div>
+      {x:${time},y:${speed},o:"O",color:"#fff",img:""}
+      {x:${time},low:8,high:17}
+    `;
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response('', {
+        status: 302,
+        headers: { 'set-cookie': 'PHPSESSID=initial; Path=/' },
+      }))
+      .mockResolvedValueOnce(new Response('', {
+        status: 302,
+        headers: { 'set-cookie': 'codeCnx=code; Path=/, autolog=auto; Path=/' },
+      }))
+      .mockResolvedValueOnce(new Response(observationHtml(1779696000000, 11)))
+      .mockResolvedValueOnce(new Response(observationHtml(1779696060000, 12)));
+
+    const sources = createRealWeatherSources({
+      clock: makeClock(),
+      env: {
+        WINDSUP_PREMIUM_ENABLED: 'true',
+        WINDSUP_USER: 'premium-user',
+        WINDSUP_PASS: 'premium-pass',
+      },
+      fetchImpl,
+      pollMs: 20_000,
+    });
+
+    expect(sources.find((item) => item.id === 'windsup_tonnara').pollMs).toBe(20_000);
+    await sources.find((item) => item.id === 'windsup_tonnara').fetch();
+    await sources.find((item) => item.id === 'windsup_piantarella').fetch();
+
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      'https://www.winds-up.com/connexion',
+      'https://www.winds-up.com/v2/',
+      'https://www.winds-up.com/spot/51',
+      'https://www.winds-up.com/spot/1659',
+    ]);
+    expect(fetchImpl.mock.calls[2][1].headers.Cookie).toContain('codeCnx=code');
+    expect(fetchImpl.mock.calls[3][1].headers.Cookie).toContain('autolog=auto');
+  });
+
+  it('falls back to public WindsUp observations and backs off premium login failures', async () => {
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const publicHtml = `
+      <div class="spotObsLine"><span>08:00</span><div class="deg">250</div></div>
+      {x:1779688800000,y:9,o:"O",color:"#fff",img:""}
+      {x:1779688800000,low:7,high:12}
+    `;
+    const fetchImpl = vi.fn()
+      .mockResolvedValueOnce(new Response('', {
+        status: 302,
+        headers: { 'set-cookie': 'PHPSESSID=initial; Path=/' },
+      }))
+      .mockResolvedValueOnce(new Response('', { status: 302 }))
+      .mockImplementation(() => Promise.resolve(new Response(publicHtml)));
+
+    const sources = createRealWeatherSources({
+      clock: makeClock(),
+      env: {
+        WINDSUP_PREMIUM_ENABLED: 'true',
+        WINDSUP_USER: 'expired-user',
+        WINDSUP_PASS: 'expired-pass',
+      },
+      fetchImpl,
+      pollMs: 20_000,
+    });
+
+    await expect(sources.find((item) => item.id === 'windsup_tonnara').fetch())
+      .resolves.toMatchObject({ payload: { live: { windSpeed: 9 } } });
+    await expect(sources.find((item) => item.id === 'windsup_piantarella').fetch())
+      .resolves.toMatchObject({ payload: { live: { windSpeed: 9 } } });
+
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toEqual([
+      'https://www.winds-up.com/connexion',
+      'https://www.winds-up.com/v2/',
+      'https://www.winds-up.com/spot/51',
+      'https://www.winds-up.com/spot/1659',
+    ]);
+    expect(warning).toHaveBeenCalledWith(expect.stringContaining('windsup_missing_premium_session'));
+    warning.mockRestore();
+  });
+
+  it('reports an explicit WindsUp error when the public page has no observations', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(new Response('<html><body>No observations</body></html>'));
+    const source = createRealWeatherSources({
+      clock: makeClock(),
+      env: {},
+      fetchImpl,
+      pollMs: 20_000,
+    }).find((item) => item.id === 'windsup_porticcio');
+
+    await expect(source.fetch()).rejects.toThrow('windsup_no_public_observations');
   });
 
   it('turns an empty Wunderground response into a normal source rejection', async () => {

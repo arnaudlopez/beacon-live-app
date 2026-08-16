@@ -5,8 +5,9 @@ export const SOURCE_UNAVAILABLE_AFTER_MS = 48 * 60 * MINUTE_MS;
 const SOURCE_STALE_THRESHOLDS = [
   [/^meteofrance_/, 90 * MINUTE_MS],
   [/^(candhis_|esurfmar_)/, 3 * 60 * MINUTE_MS],
+  [/^windsup_/, 3 * 60 * MINUTE_MS],
   [/^wunderground_ICORSEPR2$/, 30 * MINUTE_MS],
-  [/^(wunderground_|windsup_|pioupiou_)/, 15 * MINUTE_MS],
+  [/^(wunderground_|pioupiou_)/, 15 * MINUTE_MS],
 ];
 
 export function staleThresholdForSource(sourceId) {

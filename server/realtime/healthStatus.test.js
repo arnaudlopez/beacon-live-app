@@ -13,9 +13,14 @@ describe('backend health classification', () => {
       status: 'ok',
       lastObservedAt: '2026-07-11T12:30:00.000Z',
     }, NOW);
+    const delayedPublic = classifySourceHealth('windsup_tonnara', {
+      status: 'ok',
+      lastObservedAt: '2026-07-11T10:30:00.000Z',
+    }, NOW);
 
     expect(fast.status).toBe('stale');
     expect(hourly.status).toBe('healthy');
+    expect(delayedPublic.status).toBe('healthy');
   });
 
   it('distinguishes provider errors from successful responses without observations', () => {

@@ -601,6 +601,8 @@ async function fetchWunderground({ sourceId, stationId, apiKey, fetchImpl, clock
 
 const WINDSUP_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 const WINDSUP_BASE_URL = 'https://www.winds-up.com';
+const WINDSUP_PREMIUM_SESSION_TTL_MS = 30 * 60_000;
+const WINDSUP_PREMIUM_RETRY_MS = 15 * 60_000;
 
 function parseSetCookie(header, jar) {
   if (!header) return;
@@ -615,49 +617,130 @@ function jarToHeader(jar) {
   return Object.entries(jar).map(([key, value]) => `${key}=${value}`).join('; ');
 }
 
-async function fetchWindsUp({ sourceId, spotId, user, password, fetchImpl, clock }) {
+function isEnabled(value) {
+  return ['1', 'true', 'yes', 'on'].includes(String(value ?? '').trim().toLowerCase());
+}
+
+function createWindsUpClient({
+  fetchImpl,
+  clock,
+  premiumEnabled = false,
+  user = '',
+  password = '',
+}) {
   const commonHeaders = {
     'User-Agent': WINDSUP_USER_AGENT,
     Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'fr-FR,fr;q=0.9,en;q=0.8',
   };
-  const jar = {};
+  let premiumCookie = null;
+  let premiumSessionCreatedAt = 0;
+  let premiumRetryAt = 0;
+  let premiumLoginPromise = null;
+  let missingCredentialsReported = false;
 
-  const initResponse = await fetchImpl(`${WINDSUP_BASE_URL}/connexion`, {
-    headers: commonHeaders,
-    redirect: 'manual',
-  });
-  if (!initResponse.ok && initResponse.status !== 302) {
-    throw new Error(`windsup_init_${initResponse.status}`);
+  function reportPremiumFallback(error) {
+    globalThis.console?.warn?.(
+      `WindsUp premium unavailable; using delayed public observations: ${error.message}`,
+    );
   }
-  parseSetCookie(initResponse.headers?.get?.('set-cookie') || '', jar);
 
-  const authResponse = await fetchImpl(`${WINDSUP_BASE_URL}/v2/`, {
-    method: 'POST',
-    headers: {
-      ...commonHeaders,
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Origin: WINDSUP_BASE_URL,
-      Referer: `${WINDSUP_BASE_URL}/connexion`,
-      Cookie: jarToHeader(jar),
-      'Upgrade-Insecure-Requests': '1',
-    },
-    body: `action=log&pseudo=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}&submit=submit-value`,
-    redirect: 'manual',
-  });
-  if (!authResponse.ok && authResponse.status !== 302) {
-    throw new Error(`windsup_auth_${authResponse.status}`);
+  async function authenticatePremium() {
+    const jar = {};
+    const initResponse = await fetchImpl(`${WINDSUP_BASE_URL}/connexion`, {
+      headers: commonHeaders,
+      redirect: 'manual',
+    });
+    if (!initResponse.ok && initResponse.status !== 302) {
+      throw new Error(`windsup_init_${initResponse.status}`);
+    }
+    parseSetCookie(initResponse.headers?.get?.('set-cookie') || '', jar);
+
+    const authResponse = await fetchImpl(`${WINDSUP_BASE_URL}/v2/`, {
+      method: 'POST',
+      headers: {
+        ...commonHeaders,
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Origin: WINDSUP_BASE_URL,
+        Referer: `${WINDSUP_BASE_URL}/connexion`,
+        Cookie: jarToHeader(jar),
+        'Upgrade-Insecure-Requests': '1',
+      },
+      body: `action=log&pseudo=${encodeURIComponent(user)}&password=${encodeURIComponent(password)}&submit=submit-value`,
+      redirect: 'manual',
+    });
+    if (!authResponse.ok && authResponse.status !== 302) {
+      throw new Error(`windsup_auth_${authResponse.status}`);
+    }
+    parseSetCookie(authResponse.headers?.get?.('set-cookie') || '', jar);
+    if (!jar.codeCnx || !jar.autolog) throw new Error('windsup_missing_premium_session');
+    return jarToHeader(jar);
   }
-  parseSetCookie(authResponse.headers?.get?.('set-cookie') || '', jar);
-  if (!jar.codeCnx || !jar.autolog) throw new Error('windsup_missing_premium_session');
 
-  const html = await readText(await fetchImpl(`${WINDSUP_BASE_URL}/spot/${spotId}`, {
-    headers: {
-      ...commonHeaders,
-      Cookie: jarToHeader(jar),
-    },
-  }));
-  return sourceReading(sourceId, clock, parseWindsUpMobileHtml(html));
+  async function getPremiumCookie() {
+    if (!premiumEnabled) return null;
+    if (!user || !password) {
+      if (!missingCredentialsReported) {
+        missingCredentialsReported = true;
+        reportPremiumFallback(new Error('windsup_premium_credentials_missing'));
+      }
+      return null;
+    }
+
+    const now = clock.now();
+    if (premiumCookie && now - premiumSessionCreatedAt < WINDSUP_PREMIUM_SESSION_TTL_MS) {
+      return premiumCookie;
+    }
+    if (now < premiumRetryAt) return null;
+
+    if (!premiumLoginPromise) {
+      premiumLoginPromise = authenticatePremium()
+        .then((cookie) => {
+          premiumCookie = cookie;
+          premiumSessionCreatedAt = clock.now();
+          premiumRetryAt = 0;
+          return cookie;
+        })
+        .catch((error) => {
+          premiumCookie = null;
+          premiumRetryAt = clock.now() + WINDSUP_PREMIUM_RETRY_MS;
+          reportPremiumFallback(error);
+          return null;
+        })
+        .finally(() => {
+          premiumLoginPromise = null;
+        });
+    }
+    return premiumLoginPromise;
+  }
+
+  async function fetchPage(spotId, cookie = null) {
+    const html = await readText(await fetchImpl(`${WINDSUP_BASE_URL}/spot/${spotId}`, {
+      headers: cookie ? { ...commonHeaders, Cookie: cookie } : commonHeaders,
+    }));
+    return parseWindsUpMobileHtml(html);
+  }
+
+  async function fetchSource({ sourceId, spotId }) {
+    const cookie = await getPremiumCookie();
+    if (cookie) {
+      try {
+        const payload = await fetchPage(spotId, cookie);
+        if (payload) return sourceReading(sourceId, clock, payload);
+        throw new Error('windsup_no_premium_observations');
+      } catch (error) {
+        premiumCookie = null;
+        premiumRetryAt = clock.now() + WINDSUP_PREMIUM_RETRY_MS;
+        reportPremiumFallback(error);
+      }
+    }
+
+    const payload = await fetchPage(spotId);
+    if (!payload) throw new Error('windsup_no_public_observations');
+    return sourceReading(sourceId, clock, payload);
+  }
+
+  return { fetchSource };
 }
 
 function makeSource(id, pollMs, fetcher) {
@@ -666,6 +749,13 @@ function makeSource(id, pollMs, fetcher) {
     pollMs,
     fetch: fetcher,
   };
+}
+
+export function parseDisabledSourceIds(value = '') {
+  return new Set(String(value)
+    .split(',')
+    .map((sourceId) => sourceId.trim())
+    .filter(Boolean));
 }
 
 export function createRealWeatherSources({
@@ -689,8 +779,18 @@ export function createRealWeatherSources({
 
   const fastPollMs = Math.max(20_000, pollMs);
   const defaultPollMs = Math.max(60_000, pollMs);
+  const publicWindsUpPollMs = Math.max(2 * 60_000, pollMs);
   const slowPollMs = DEFAULT_SLOW_POLL_MS;
   const sources = [];
+  const disabledSourceIds = parseDisabledSourceIds(env.WEATHER_DISABLED_SOURCE_IDS);
+  const windsUpPremiumEnabled = isEnabled(env.WINDSUP_PREMIUM_ENABLED);
+  const windsUpClient = createWindsUpClient({
+    fetchImpl: timedFetch,
+    clock,
+    premiumEnabled: windsUpPremiumEnabled,
+    user: env.WINDSUP_USER,
+    password: env.WINDSUP_PASS,
+  });
 
   if (env.METEOFRANCE_KEY) {
     sources.push(
@@ -818,26 +918,24 @@ export function createRealWeatherSources({
     })));
   }
 
-  if (env.WINDSUP_USER && env.WINDSUP_PASS) {
-    for (const [sourceId, spotId] of [
-      ['windsup_porticcio', '1726'],
-      ['windsup_tonnara', '51'],
-      ['windsup_porto_polo', '84'],
-      ['windsup_piantarella', '1659'],
-      ['windsup_santa_manza', '1549'],
-      ['windsup_balistra', '1693'],
-      ['windsup_figari_eole', '1661'],
-    ]) {
-      sources.push(makeSource(sourceId, fastPollMs, () => fetchWindsUp({
+  for (const [sourceId, spotId] of [
+    ['windsup_porticcio', '1726'],
+    ['windsup_tonnara', '51'],
+    ['windsup_porto_polo', '84'],
+    ['windsup_piantarella', '1659'],
+    ['windsup_santa_manza', '1549'],
+    ['windsup_balistra', '1693'],
+    ['windsup_figari_eole', '1661'],
+  ]) {
+    sources.push(makeSource(
+      sourceId,
+      windsUpPremiumEnabled ? fastPollMs : publicWindsUpPollMs,
+      () => windsUpClient.fetchSource({
         sourceId,
         spotId,
-        user: env.WINDSUP_USER,
-        password: env.WINDSUP_PASS,
-        fetchImpl: timedFetch,
-        clock,
-      })));
-    }
+      }),
+    ));
   }
 
-  return sources;
+  return sources.filter((source) => !disabledSourceIds.has(source.id));
 }

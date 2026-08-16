@@ -155,14 +155,16 @@ export function createWeatherApiServer({
 
     if (url.pathname === '/api/health') {
       const snapshot = runtime.getSnapshot();
+      const providers = summarizeProviders(snapshot, clock.now());
       writeJson(res, 200, {
-        status: 'ok',
+        status: providers.status === 'healthy' ? 'ok' : 'degraded',
         sseClients: clients.size,
         pushConfigured: Boolean(pushService?.isConfigured?.()),
         pushSubscriptions: pushService?.getSubscriptionCount?.() ?? 0,
         sentryConfigured: Boolean(monitoringService?.isSentryConfigured?.()),
         heartbeatConfigured: Boolean(monitoringService?.isHeartbeatConfigured?.()),
         sourceHealth: snapshot.sourceHealth || {},
+        providers,
         ts: snapshot.ts,
         checkedAt: snapshot.checkedAt,
       });
