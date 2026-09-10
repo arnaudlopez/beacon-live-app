@@ -142,7 +142,7 @@ export default function Dashboard() {
   }, []);
 
   // All data via the local realtime weather backend.
-  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime, connectionStatus, isCached, refresh } = useWeatherData();
+  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime, connectionStatus, refresh } = useWeatherData();
 
   const notifications = useNotifications(windData);
 
@@ -314,22 +314,13 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <p className="delivery-status" role="status">
-        {notifications.pushConfigured === null ? 'Alertes : vérification de la connexion…'
-          : notifications.pushSubscribed ? 'Alertes actives même lorsque l’application est fermée.'
-            : notifications.pushConfigured ? 'Alertes sur cet appareil : abonnement à activer.'
-              : 'Alertes locales : l’application doit rester ouverte au premier plan.'}
-      </p>
-      {(isCached || connectionStatus === 'offline') && (
-        <div className="connection-notice" role="status">
-          {connectionStatus === 'offline' ? 'Hors ligne. ' : ''}
-          {lastUpdated ? 'Dernières données conservées ; elles seront actualisées au retour de la connexion.' : 'Aucune donnée sauvegardée sur cet appareil.'}
-        </div>
+      {currentAlertSettings.enabled && notifications.pushConfigured === false && (
+        <p className="delivery-status">Alertes actives uniquement lorsque l’application est ouverte.</p>
       )}
       {weatherData && !isAlertObservationFresh(windData[displaySource.id], now) && (
         <div className="connection-notice" role="status">Mesure ancienne ou station en difficulté — affichée pour consultation, exclue des alertes.</div>
       )}
-      {errorMessage && <div className="error-message" role="alert">{errorMessage}</div>}
+      {errorMessage && !weatherData && <div className="error-message" role="alert">{errorMessage}</div>}
       {notifications.deliveryError && <div className="error-message" role="alert">{notifications.deliveryError}</div>}
 
       {isLoading && !weatherData && (
@@ -379,14 +370,9 @@ export default function Dashboard() {
       </Suspense>
 
       <div className="status-bar glass-panel" style={{ padding: '0.8rem 1.2rem', marginTop: '2rem', transition: 'border-color 0.3s ease', borderColor: isRealtime ? 'rgba(34, 197, 94, 0.6)' : undefined }} role="status">
-        <span>{{ live: '🟢 Temps réel connecté', polling: '🟢 Actualisation périodique', offline: '⚪ Hors ligne', paused: '⏸ En pause', connecting: 'Connexion…', reconnecting: '🟠 Reconnexion…' }[connectionStatus] || 'Connexion…'}</span>
-        {isRealtime && (
-          <span style={{ marginLeft: '0.8rem', color: '#22c55e', fontWeight: 700, fontSize: '0.8rem', animation: 'fadeIn 0.3s ease' }}>
-            ⚡ Données reçues
-          </span>
-        )}
+        <span>{{ live: '🟢 En direct', polling: '🟢 À jour', offline: '⚪ Hors ligne', paused: '⏸ En pause', connecting: 'Actualisation…', reconnecting: 'Actualisation…' }[connectionStatus] || 'Actualisation…'}</span>
         <span style={{ float: 'right' }}>
-          {lastUpdated ? `Données du ${format(lastUpdated, 'dd/MM à HH:mm:ss')}` : 'En attente de données'}
+          {lastUpdated ? `Données du ${format(lastUpdated, 'dd/MM à HH:mm')}` : 'En attente de données'}
         </span>
         <button className="source-toggle-btn" onClick={refresh} disabled={connectionStatus === 'offline'}>Actualiser</button>
       </div>

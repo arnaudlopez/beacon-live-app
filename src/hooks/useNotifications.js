@@ -122,7 +122,7 @@ export function useNotifications(allWindData) {
       } catch {
         if (!cancelled) {
           setPushConfigured(null);
-          setDeliveryError('Vérification des alertes en attente de connexion. Nouvelle tentative automatique.');
+          // Background reconciliation stays silent; action failures remain visible.
         }
       } finally {
         busyRef.current = false;

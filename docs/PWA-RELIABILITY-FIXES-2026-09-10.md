@@ -40,3 +40,7 @@ La configuration Docker standard utilise `VITE_WEATHER_BACKEND_URL=/api`. La CSP
 Les diagnostics de connexion sont conservés uniquement dans le sessionStorage du navigateur, sous `beacon_connection_diagnostics_v1`, avec un maximum de 50 événements. Ils contiennent dates, types d'événements, visibilité, disponibilité réseau et durées ; aucune mesure météo, clé ni URL d'abonnement. Aucun envoi de télémétrie externe n'a été ajouté.
 
 Les changements introduisent le dossier `shared/` et le fichier `nginx-security-headers.conf`, inclus par le Dockerfile. Il faut reconstruire **les deux services** lors du déploiement. Les snapshots déjà persistés restent lisibles ; le nouveau serveur émet ses révisions à partir d'une nouvelle session.
+
+## Ajustement UX après retour utilisateur
+
+Les vérifications automatiques des alertes et la restauration du cache s'effectuent sans bandeau. Le statut réseau et la date des données restent discrets en bas de page ; une interruption temporaire n'ajoute pas de message d'erreur si des mesures sont déjà affichées. Les échecs d'activation/désactivation restent visibles, ainsi que la restriction des alertes locales lorsqu'une alerte est effectivement activée. Le libellé de connexion a été simplifié et l'indicateur redondant « Données reçues » retiré.
