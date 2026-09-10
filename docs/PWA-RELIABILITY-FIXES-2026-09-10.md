@@ -23,7 +23,7 @@ Les problèmes de l'[audit](./AUDIT-PWA-2026-09-10.md) ont été traités dans l
 
 ## Validation
 
-- 243 tests réussis dans 26 fichiers, dont 21 nouveaux cas de régression.
+- 246 tests réussis dans 27 fichiers, dont 24 nouveaux cas de régression.
 - ESLint global et contrôle des espaces du diff réussis.
 - Build de production et builds Docker des deux cibles frontend/API réussis.
 - Vérification de syntaxe Nginx et des en-têtes HTTP réellement servis.
@@ -44,3 +44,5 @@ Les changements introduisent le dossier `shared/` et le fichier `nginx-security-
 ## Ajustement UX après retour utilisateur
 
 Les vérifications automatiques des alertes et la restauration du cache s'effectuent sans bandeau. Le statut réseau et la date des données restent discrets en bas de page ; une interruption temporaire n'ajoute pas de message d'erreur si des mesures sont déjà affichées. Les échecs d'activation/désactivation restent visibles, ainsi que la restriction des alertes locales lorsqu'une alerte est effectivement activée. Le libellé de connexion a été simplifié et l'indicateur redondant « Données reçues » retiré.
+
+Le premier chargement est également silencieux en cas de coupure : tant qu’aucune mesure n’est disponible, la zone météo affiche un état vide neutre. Les erreurs de transport ne sont plus relayées en bandeau, même sans cache. Trois tests du tableau de bord couvrent ce cas, la conservation des mesures et les erreurs liées à une action sur les alertes.

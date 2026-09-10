@@ -142,7 +142,7 @@ export default function Dashboard() {
   }, []);
 
   // All data via the local realtime weather backend.
-  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime, connectionStatus, refresh } = useWeatherData();
+  const { windData, surfData, waterData, isLoading, lastUpdated, isRealtime, connectionStatus, refresh } = useWeatherData();
 
   const notifications = useNotifications(windData);
 
@@ -191,19 +191,6 @@ export default function Dashboard() {
   useEffect(() => {
     try { localStorage.setItem(ACTIVE_SOURCE_KEY, JSON.stringify(activeSource.id)); } catch { /* Optional preference. */ }
   }, [activeSource]);
-
-  // Error message (suppress during loading)
-  const errorMessage = useMemo(() => {
-    if (isLoading) return '';
-    if (fetchError) return fetchError;
-    const activeData = windData[displaySource.id];
-    if (!activeData || !activeData.live) {
-      if (Object.values(windData).some(v => v !== null)) {
-        return `${displaySource.name} : données indisponibles`;
-      }
-    }
-    return '';
-  }, [windData, displaySource.id, displaySource.name, isLoading, fetchError]);
 
   const currentAlertSettings = notifications.settings[displaySource.id] || notifications.DEFAULT_SETTINGS;
   const beaufort = weatherData ? getBeaufort(weatherData.windGust) : null;
@@ -320,7 +307,6 @@ export default function Dashboard() {
       {weatherData && !isAlertObservationFresh(windData[displaySource.id], now) && (
         <div className="connection-notice" role="status">Mesure ancienne ou station en difficulté — affichée pour consultation, exclue des alertes.</div>
       )}
-      {errorMessage && !weatherData && <div className="error-message" role="alert">{errorMessage}</div>}
       {notifications.deliveryError && <div className="error-message" role="alert">{notifications.deliveryError}</div>}
 
       {isLoading && !weatherData && (
@@ -330,6 +316,12 @@ export default function Dashboard() {
           <div className="widgets-grid" style={{ marginTop: '1.5rem' }}>
             <SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard /><SkeletonCard />
           </div>
+        </div>
+      )}
+
+      {!isLoading && !weatherData && (
+        <div className="history-pending glass-panel weather-empty-state" role="status">
+          Les relevés ne sont pas encore disponibles.
         </div>
       )}
 
