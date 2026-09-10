@@ -6,23 +6,27 @@ registerSW({
   immediate: true,
   onRegisteredSW(swUrl, registration) {
     if (!registration) return
-
-    setInterval(async () => {
-      if (registration.installing || !navigator.onLine) return
-
+    let checking = false
+    let lastCheck = 0
+    async function checkUpdate() {
+      if (checking || registration.installing || !navigator.onLine || document.visibilityState === 'hidden') return
+      if (Date.now() - lastCheck < 60_000) return
+      checking = true
+      lastCheck = Date.now()
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 12_000)
       try {
-        const response = await fetch(swUrl, {
-          cache: 'no-store',
-          headers: {
-            'cache': 'no-store',
-            'cache-control': 'no-cache',
-          },
-        })
-
+        const response = await fetch(swUrl, { cache: 'no-store', signal: controller.signal })
         if (response.ok) await registration.update()
       } catch {
-        // A failed update check must never prevent the offline PWA from working.
+        // An update check must never prevent the offline PWA from working.
+      } finally {
+        clearTimeout(timeout)
+        checking = false
       }
-    }, UPDATE_INTERVAL_MS)
+    }
+    setInterval(checkUpdate, UPDATE_INTERVAL_MS)
+    window.addEventListener('online', checkUpdate)
+    document.addEventListener('visibilitychange', checkUpdate)
   },
 })

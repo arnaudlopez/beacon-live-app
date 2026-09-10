@@ -46,7 +46,8 @@ describe('realtime Docker deployment config', () => {
     expect(nginx).toContain('location /api/');
     expect(nginx).toContain('proxy_pass http://weather-api:8787/api/');
     expect(nginx).toContain('proxy_buffering off;');
-    expect(nginx).toContain("connect-src 'self'");
+    expect(nginx).toContain("include /etc/nginx/security-headers.conf;");
+    expect(await readProjectFile('nginx-security-headers.conf')).toContain("connect-src 'self'");
   });
 
   it('documents the local realtime backend deployment path', async () => {

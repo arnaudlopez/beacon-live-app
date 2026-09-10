@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import { observationTime } from '../../shared/weatherFreshness.js';
 import { SOURCE_UNAVAILABLE_AFTER_MS } from './healthStatus.js';
 
 const WIND_SOURCE_MAP = {
@@ -124,6 +126,8 @@ function createInitialSourceState() {
 
 function createSnapshot(clock, initialSnapshot) {
   return {
+    streamId: randomUUID(),
+    revision: 0,
     ts: initialSnapshot?.ts ?? new Date(clock.now()).toISOString(),
     checkedAt: initialSnapshot?.checkedAt ?? null,
     windData: clone(initialSnapshot?.windData) ?? {},
@@ -158,6 +162,7 @@ export function createWeatherRuntime({
   store,
   historyRetentionMs = DEFAULT_HISTORY_RETENTION_MS,
   disabledSourceIds = [],
+  concurrency = 3,
 }) {
   if (!clock || typeof clock.now !== 'function') {
     throw new Error('createWeatherRuntime requires a clock with now()');
@@ -166,6 +171,8 @@ export function createWeatherRuntime({
     throw new Error('createWeatherRuntime requires sources');
   }
 
+  if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 10) throw new Error('invalid source concurrency');
+  let polling = null;
   const sourceStates = new Map();
   const subscribers = new Set();
   const snapshot = createSnapshot(clock, initialSnapshot);
@@ -219,11 +226,13 @@ export function createWeatherRuntime({
       ...snapshot.sourceHealth[sourceId],
       ...patch,
     };
+    const wind = snapshot.windData[WIND_SOURCE_MAP[sourceId] || sourceId];
+    if (wind) wind.sourceStatus = snapshot.sourceHealth[sourceId].status;
   }
 
-  async function persistSnapshot() {
+  async function persistSnapshot(value = getSnapshot()) {
     if (typeof store?.saveSnapshot === 'function') {
-      await store.saveSnapshot(getSnapshot());
+      await store.saveSnapshot(value);
     }
   }
 
@@ -311,7 +320,7 @@ export function createWeatherRuntime({
 
   function mergeReading(sourceId, sourceState, reading) {
     const payload = reading?.payload ?? reading;
-    const hash = stableStringify(payload);
+    const hash = stableStringify({ payload, observedAt: reading?.observedAt });
     const changed = hash !== sourceState.hash;
 
     if (changed) {
@@ -334,7 +343,7 @@ export function createWeatherRuntime({
       const reading = await source.fetch();
       const previousFailures = sourceState.consecutiveFailures;
       sourceState.consecutiveFailures = 0;
-      const receivedAt = new Date(now).toISOString();
+      const receivedAt = new Date(clock.now()).toISOString();
       if (isUnavailableObservation(reading?.observedAt, now)) {
         sourceState.hash = null;
         removeSourcePayload(snapshot, source.id);
@@ -408,54 +417,67 @@ export function createWeatherRuntime({
     }
   }
 
-  async function pollDueSources() {
+  function expireSources() {
+    for (const source of sources) {
+      const data = getPayloadForSource(source.id);
+      const time = observationTime(data) ?? toTimestamp(snapshot.sourceHealth[source.id]?.lastObservedAt);
+      if (data && time !== null && clock.now() - time >= SOURCE_UNAVAILABLE_AFTER_MS) {
+        removeSourcePayload(snapshot, source.id);
+        sourceStates.get(source.id).hash = null;
+        updateHealth(source.id, { status: 'stale' });
+      }
+    }
+  }
+
+  async function runPoll() {
     const now = clock.now();
-    const dueSources = sources.filter((source) => {
-      const state = sourceStates.get(source.id);
-      return state && now >= state.nextPollAt;
-    });
-
-    if (dueSources.length === 0) return [];
-
-    const changed = [];
-    for (const source of dueSources) {
-      const result = await pollSource(source);
-      if (result) changed.push(result);
+    const dueSources = sources.filter(source => now >= sourceStates.get(source.id).nextPollAt);
+    if (!dueSources.length) return [];
+    expireSources();
+    const events = [];
+    let index = 0;
+    let publication = Promise.resolve();
+    async function worker() {
+      while (index < dueSources.length) {
+        const source = dueSources[index++];
+        const result = await pollSource(source);
+        expireSources();
+        snapshot.revision += 1;
+        if (result) snapshot.ts = new Date(clock.now()).toISOString();
+        const event = {
+          type: result ? 'weather:update' : 'weather:status',
+          sources: [source.id],
+          data: getSnapshot(),
+          latencyMs: Math.max(0, clock.now() - (toTimestamp(result?.observedAt) ?? clock.now())),
+        };
+        // Preserve publication order even if persistence is slower than collection.
+        publication = publication.then(async () => {
+          await persistSnapshot(event.data);
+          notify(event);
+          if (result) events.push(event);
+        });
+        await publication;
+      }
     }
-
+    const outcomes = await Promise.allSettled(Array.from({ length: Math.min(concurrency, dueSources.length) }, worker));
+    const failed = outcomes.find(outcome => outcome.status === 'rejected');
+    if (failed) throw failed.reason;
     snapshot.checkedAt = new Date(clock.now()).toISOString();
-
-    if (changed.length > 0) {
-      snapshot.ts = new Date(clock.now()).toISOString();
-      const observedTimes = changed
-        .map((item) => toTimestamp(item.observedAt))
-        .filter((time) => time !== null);
-      const newestObservedAt = observedTimes.length > 0 ? Math.max(...observedTimes) : clock.now();
-      const event = {
-        type: 'weather:update',
-        sources: changed.map((item) => item.sourceId),
-        data: getSnapshot(),
-        latencyMs: Math.max(0, clock.now() - newestObservedAt),
-      };
-      await persistSnapshot();
-      notify(event);
-      notify({
-        type: 'weather:poll-complete',
-        sources: dueSources.map((source) => source.id),
-        checkedAt: snapshot.checkedAt,
-        sourceHealth: snapshot.sourceHealth,
-      });
-      return [event];
-    }
-
+    snapshot.revision += 1;
     await persistSnapshot();
+    notify({ type: 'weather:status', data: getSnapshot() });
     notify({
       type: 'weather:poll-complete',
-      sources: dueSources.map((source) => source.id),
+      sources: dueSources.map(source => source.id),
       checkedAt: snapshot.checkedAt,
       sourceHealth: snapshot.sourceHealth,
     });
-    return [];
+    return events;
+  }
+
+  function pollDueSources() {
+    if (!polling) polling = runPoll().finally(() => { polling = null; });
+    return polling;
   }
 
   function getSnapshot() {

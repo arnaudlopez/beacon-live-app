@@ -12,3 +12,10 @@ DEPLOY_DOCKER.md
 npm-debug.log
 yarn-error.log
 .vercel
+
+.claude
+data
+docs
+
+.playwright-cli
+output

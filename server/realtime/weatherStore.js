@@ -68,6 +68,13 @@ export function createFileWeatherStore({ filePath, maxObservations = DEFAULT_MAX
   }
   const observationLimit = normalizeMaxObservations(maxObservations);
 
+  let writeQueue = Promise.resolve();
+  function enqueue(operation) {
+    const pending = writeQueue.then(operation);
+    writeQueue = pending.catch(() => {});
+    return pending;
+  }
+
   async function loadState() {
     try {
       const payload = await readFile(filePath, 'utf8');
@@ -121,8 +128,8 @@ export function createFileWeatherStore({ filePath, maxObservations = DEFAULT_MAX
 
   return {
     loadState,
-    saveSnapshot,
-    appendObservation,
-    recordSourceHealth,
+    saveSnapshot: value => enqueue(() => saveSnapshot(clone(value))),
+    appendObservation: value => enqueue(() => appendObservation(clone(value))),
+    recordSourceHealth: (id, health) => enqueue(() => recordSourceHealth(id, clone(health))),
   };
 }

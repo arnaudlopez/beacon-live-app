@@ -604,3 +604,47 @@ describe('weather runtime realtime contract', () => {
     }));
   });
 });
+
+describe('runtime recovery and independent collection', () => {
+  it('expires a station during repeated failures and publishes its removal', async () => {
+    const clock = makeClock();
+    const source = { id: 'windsup_porticcio', pollMs: 20000, fetch: vi.fn().mockResolvedValueOnce(reading('windsup_porticcio', new Date(clock.now()).toISOString(), 20)).mockRejectedValue(new Error('offline')) };
+    const runtime = createWeatherRuntime({ clock, sources: [source] });
+    const events = [];
+    runtime.subscribe(event => events.push(event));
+    await runtime.pollDueSources();
+    clock.advance(72 * 3600000);
+    await runtime.pollDueSources();
+    expect(runtime.getSnapshot().windData.porticcio).toBeUndefined();
+    expect(events.filter(event => event.data).at(-1).data.windData.porticcio).toBeUndefined();
+  });
+
+  it('publishes a fast source while another provider is still waiting', async () => {
+    const clock = makeClock();
+    let finishSlow;
+    let fastPublished;
+    const published = new Promise(resolve => { fastPublished = resolve; });
+    const runtime = createWeatherRuntime({ clock, sources: [
+      { id: 'slow', pollMs: 20000, fetch: () => new Promise(resolve => { finishSlow = resolve; }) },
+      { id: 'windsup_porticcio', pollMs: 20000, fetch: async () => reading('windsup_porticcio', new Date(clock.now()).toISOString(), 20) },
+    ] });
+    runtime.subscribe(event => { if (event.type === 'weather:update' && event.sources.includes('windsup_porticcio')) fastPublished(event); });
+    const poll = runtime.pollDueSources();
+    const event = await published;
+    expect(event.data.windData.porticcio.live.windSpeed).toBe(20);
+    expect(event.data.windData.slow).toBeUndefined();
+    finishSlow(reading('slow', new Date(clock.now()).toISOString(), 10));
+    await poll;
+    expect(runtime.getSnapshot().revision).toBeGreaterThan(event.data.revision);
+  });
+
+  it('updates observation time even when all measured values are unchanged', async () => {
+    const clock = makeClock();
+    const source = { id: 'windsup_porticcio', pollMs: 20000, fetch: async () => ({ observedAt: new Date(clock.now()).toISOString(), payload: { live: { windSpeed: 20, windGust: 25 } } }) };
+    const runtime = createWeatherRuntime({ clock, sources: [source] });
+    await runtime.pollDueSources();
+    clock.advance(20000);
+    await runtime.pollDueSources();
+    expect(runtime.getSnapshot().windData.porticcio.observedAt).toBe(new Date(clock.now()).toISOString());
+  });
+});

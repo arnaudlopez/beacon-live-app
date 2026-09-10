@@ -44,6 +44,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev --legacy-peer-deps || npm install --omit=dev --legacy-peer-deps
 
 COPY server ./server
+COPY shared ./shared
 
 EXPOSE 8787
 CMD ["node", "server/realtime/server.js"]
@@ -53,6 +54,7 @@ FROM nginx:alpine AS frontend
 
 # Copier la configuration Nginx
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+COPY nginx-security-headers.conf /etc/nginx/security-headers.conf
 
 # Copier les fichiers buildés depuis l'étape 1
 COPY --from=build /app/dist /usr/share/nginx/html

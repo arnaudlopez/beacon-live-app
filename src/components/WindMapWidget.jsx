@@ -3,6 +3,7 @@ import { CloudSun, ExternalLink, Wind } from 'lucide-react';
 import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { observationTime } from '../../shared/weatherFreshness';
 import { windFromToFlowDirection } from '../utils/beaufort';
 
 function MapCenterUpdater({ center }) {
@@ -23,18 +24,10 @@ function ZoomTracker({ onZoomChange }) {
   return null;
 }
 
-function getTimeSince(history) {
-  if (!history || history.length === 0) return null;
-  const last = history[history.length - 1];
-  if (!last || !last.time) return null;
-  const ts = typeof last.time === 'number' ? last.time : new Date(last.time).getTime();
-  return Date.now() - ts;
-}
-
 function formatAge(ms) {
   if (ms === null) return '';
   const min = Math.floor(ms / 60000);
-  if (min < 1) return 'Live';
+  if (min < 1) return '< 1 min';
   if (min < 60) return `${min}min`;
   const h = Math.floor(min / 60);
   if (h < 24) return `${h}h${min % 60 > 0 ? String(min % 60).padStart(2, '0') : ''}`;
@@ -48,14 +41,15 @@ function getStaleLevel(ms) {
   return 'stale';
 }
 
-function WindMarker({ source, coords, active, onClick, history, compact }) {
+function WindMarker({ source, coords, active, onClick, compact, now }) {
   const data = source?.live;
   if (!data) return null;
 
   const hasDirection = data.windDirection !== null && data.windDirection !== undefined;
   const arrowDirection = windFromToFlowDirection(data.windDirection);
-  const ageMs = getTimeSince(history);
-  const level = getStaleLevel(ageMs);
+  const measuredAt = observationTime(source);
+  const ageMs = measuredAt === null ? null : Math.max(0, now - measuredAt);
+  const level = source.sourceStatus && source.sourceStatus !== 'ok' ? 'stale' : getStaleLevel(ageMs);
   const ageLabel = formatAge(ageMs);
 
   const staleClass = level === 'stale' ? 'wind-marker-stale' : '';
@@ -64,6 +58,8 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
 
   // Speed color based on wind intensity
   const speed = parseFloat(data.windSpeed) || 0;
+  const speedLabel = Number.isFinite(Number.parseFloat(data.windSpeed)) ? Number.parseFloat(data.windSpeed) : '—';
+  const gustLabel = Number.isFinite(Number.parseFloat(data.windGust)) ? Number.parseFloat(data.windGust) : '—';
   const speedColor = speed >= 20 ? '#ef4444' : speed >= 12 ? '#f59e0b' : 'rgba(255,255,255,0.85)';
 
   if (compact) {
@@ -78,7 +74,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
             </svg>
           </div>` : ''}
           <div class="wind-pill" style="border-color: ${badgeColor}40;">
-            <span class="wind-pill-speed" style="color: ${speedColor};">${data.windSpeed}</span>
+            <span class="wind-pill-speed" style="color: ${speedColor};">${speedLabel}</span>
             <span class="wind-pill-dot" style="background: ${badgeColor};"></span>
           </div>
         </div>
@@ -108,8 +104,8 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
           </svg>
         </div>` : ''}
         <div class="wind-label glass-panel" style="cursor: pointer;">
-          <div class="wind-speed" style="color: ${speedColor};">${data.windSpeed} <span class="text-xs">kts</span></div>
-          <div class="wind-gust" style="color: ${speedColor}; opacity: 0.7;">Max: ${data.windGust}</div>
+          <div class="wind-speed" style="color: ${speedColor};">${speedLabel} <span class="text-xs">kts</span></div>
+          <div class="wind-gust" style="color: ${speedColor}; opacity: 0.7;">Max: ${gustLabel}</div>
           <div class="wind-age-badge" style="color: ${badgeColor};">
             <span class="stale-dot ${dotClass}" style="background: ${badgeColor};"></span>
             ${ageLabel}
@@ -134,7 +130,7 @@ function WindMarker({ source, coords, active, onClick, history, compact }) {
 const COMPACT_ZOOM_THRESHOLD = 10;
 const FORECAST_EXPLORER_URL = 'https://corsewind-ai.ajaccio.surf/';
 
-export default function WindMapWidget({ allWindData, activeSourceId, sources, onSourceSelect }) {
+export default function WindMapWidget({ allWindData, activeSourceId, sources, onSourceSelect, now }) {
   const [zoomLevel, setZoomLevel] = useState(10);
   const handleZoom = useCallback((z) => setZoomLevel(z), []);
 
@@ -185,11 +181,11 @@ export default function WindMapWidget({ allWindData, activeSourceId, sources, on
             return (
               <WindMarker 
                 key={s.id} 
-                source={{ ...s, live: sourceData.live }} 
+                source={sourceData}
                 coords={s.coords} 
                 active={s.id === activeSourceId}
                 onClick={() => onSourceSelect && onSourceSelect(s)}
-                history={sourceData.history}
+                now={now}
                 compact={isCompact}
               />
             );

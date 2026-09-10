@@ -1,5 +1,5 @@
 const regex = /\{x:(\d{13}),\s*y:([\d.]+)[^}]*o:"([^"]*)"[^}]*min:"([\d.]*)"[^}]*max:"([\d.]*)"[^}]*\}/g;
-const fs = require('fs');
+
 fetch("https://www.winds-up.com/spot-porticcio--windsurf-kitesurf-1726-observations-releves-vent.html")
   .then(r => r.text())
   .then(html => {

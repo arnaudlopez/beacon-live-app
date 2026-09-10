@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { isAlertObservationFresh } from '../../shared/weatherFreshness';
+import { fetchWithTimeout, withTimeout } from '../utils/network';
 import { SOURCES, NOTIF_COOLDOWN } from '../config/sources';
 
 const STORAGE_KEY = 'beacon_notification_settings_v2';
@@ -10,7 +12,10 @@ const DEFAULT_SETTINGS = { enabled: false, avgEnabled: false, avgThreshold: 10, 
 function loadSettings() {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return Object.fromEntries(SOURCES.map(source => [source.id, { ...DEFAULT_SETTINGS, ...parsed?.[source.id] }]));
+    }
   } catch { /* storage may be unavailable */ }
   return Object.fromEntries(SOURCES.map((source) => [source.id, { ...DEFAULT_SETTINGS }]));
 }
@@ -35,29 +40,27 @@ function urlBase64ToUint8Array(value) {
   return Uint8Array.from([...raw].map((character) => character.charCodeAt(0)));
 }
 
-async function getPushConfig() {
-  const response = await fetch(`${API_URL}/push/public-key`, { headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  return response.json();
+function getPushConfig() {
+  return fetchWithTimeout(`${API_URL}/push/public-key`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
 }
 
-async function savePushSubscription(subscription, settings) {
-  const response = await fetch(`${API_URL}/push/subscriptions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+function supportsPush(config) {
+  return Boolean(config.configured && config.publicKey && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window);
+}
+
+function savePushSubscription(subscription, settings) {
+  return fetchWithTimeout(`${API_URL}/push/subscriptions`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ subscription: subscription.toJSON(), alerts: alertsForServer(settings) }),
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
 }
 
 async function removePushSubscription(subscription) {
-  const response = await fetch(`${API_URL}/push/subscriptions`, {
-    method: 'DELETE',
-    headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+  await fetchWithTimeout(`${API_URL}/push/subscriptions`, {
+    method: 'DELETE', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify({ endpoint: subscription.endpoint }),
   });
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  await subscription.unsubscribe();
+  await withTimeout(subscription.unsubscribe());
 }
 
 async function showNotification(title, options) {
@@ -75,32 +78,72 @@ export function useNotifications(allWindData) {
   const [pushConfigured, setPushConfigured] = useState(null);
   const [pushSubscribed, setPushSubscribed] = useState(false);
   const [deliveryError, setDeliveryError] = useState('');
+  const [isBusy, setIsBusy] = useState(false);
+  const reconcileRef = useRef(() => {});
+  const busyRef = useRef(false);
+  const settingsRef = useRef(settings);
   const lastNotificationTimes = useRef({});
   const previousValues = useRef({});
   const checkTimerRef = useRef(null);
 
-  useEffect(() => { saveSettings(settings); }, [settings]);
+  useEffect(() => { settingsRef.current = settings; saveSettings(settings); }, [settings]);
 
   useEffect(() => {
     let cancelled = false;
-    getPushConfig()
-      .then(async (config) => {
-        const supported = Boolean(config.configured && config.publicKey && 'serviceWorker' in navigator && 'PushManager' in window);
-        if (!cancelled) setPushConfigured(supported);
-        if (!supported || Notification.permission !== 'granted') return;
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
-        if (subscription) {
-          await savePushSubscription(subscription, settings);
-          if (!cancelled) setPushSubscribed(true);
+    async function reconcile() {
+      if (cancelled || busyRef.current || navigator.onLine === false || document.visibilityState === 'hidden') return;
+      busyRef.current = true;
+      setIsBusy(true);
+      try {
+        const config = await getPushConfig();
+        if (cancelled) return;
+        const supported = supportsPush(config);
+        let subscribed = false;
+        if (supported && Notification.permission === 'granted') {
+          const registration = await withTimeout(navigator.serviceWorker.ready);
+          const subscription = await withTimeout(registration.pushManager.getSubscription());
+          if (cancelled) return;
+          const anyEnabled = Object.values(settingsRef.current).some(value => value.enabled);
+          if (subscription) {
+            if (anyEnabled) {
+              await savePushSubscription(subscription, settingsRef.current);
+              subscribed = true;
+            } else await removePushSubscription(subscription);
+          }
+          if (!subscribed && anyEnabled) {
+            setDeliveryError("Alertes à réactiver : désactive puis réactive une alerte pour confirmer l'abonnement de cet appareil.");
+          } else setDeliveryError('');
         }
-      })
-      .catch(() => {
-        if (!cancelled) setPushConfigured(false);
-      });
-    return () => { cancelled = true; };
-    // Reconcile the persisted subscription once on startup. User edits are locked while enabled.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        if (!cancelled) {
+          setPushConfigured(supported);
+          setPushSubscribed(subscribed);
+          if (!supported) setDeliveryError('');
+        }
+      } catch {
+        if (!cancelled) {
+          setPushConfigured(null);
+          setDeliveryError('Vérification des alertes en attente de connexion. Nouvelle tentative automatique.');
+        }
+      } finally {
+        busyRef.current = false;
+        if (!cancelled) setIsBusy(false);
+        else queueMicrotask(() => reconcileRef.current());
+      }
+    }
+    reconcileRef.current = reconcile;
+    void reconcile();
+    const timer = setInterval(reconcile, 60_000);
+    window.addEventListener('online', reconcile);
+    window.addEventListener('pageshow', reconcile);
+    document.addEventListener('visibilitychange', reconcile);
+    return () => {
+      cancelled = true;
+      if (reconcileRef.current === reconcile) reconcileRef.current = () => {};
+      clearInterval(timer);
+      window.removeEventListener('online', reconcile);
+      window.removeEventListener('pageshow', reconcile);
+      document.removeEventListener('visibilitychange', reconcile);
+    };
   }, []);
 
   const update = useCallback((sourceId, patch) => {
@@ -111,92 +154,80 @@ export function useNotifications(allWindData) {
   }, []);
 
   const toggle = useCallback(async (sourceId, sourceName) => {
-    const current = settings[sourceId] || DEFAULT_SETTINGS;
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setIsBusy(true);
     setDeliveryError('');
-
-    if (!current.enabled) {
-      if (!('Notification' in window)) {
-        alert("Ce navigateur ne supporte pas les notifications. Sur iPhone/iPad, ajoute d'abord la PWA à l'écran d'accueil.");
-        return;
-      }
-      if (!current.avgEnabled && !current.gustEnabled) {
-        alert("Active au moins un type d'alerte (Moy ou Raf) avant d'activer !");
-        return;
-      }
-      const permission = await Notification.requestPermission();
-      if (permission !== 'granted') {
-        alert('Veuillez autoriser les notifications dans les paramètres de votre navigateur.');
-        return;
-      }
-
-      const nextSettings = {
-        ...settings,
-        [sourceId]: { ...current, enabled: true },
-      };
-      try {
-        let config = null;
-        let usePush = pushConfigured;
-        if (usePush === null) {
-          config = await getPushConfig();
-          usePush = Boolean(config.configured && config.publicKey && 'serviceWorker' in navigator && 'PushManager' in window);
-          setPushConfigured(usePush);
+    const currentSettings = settingsRef.current;
+    const current = currentSettings[sourceId] || DEFAULT_SETTINGS;
+    try {
+      if (!current.enabled) {
+        if (!('Notification' in window)) throw new Error('unsupported');
+        if ((!current.avgEnabled && !current.gustEnabled)
+          || (current.avgEnabled && (!Number.isFinite(current.avgThreshold) || current.avgThreshold < 1 || current.avgThreshold > 100))
+          || (current.gustEnabled && (!Number.isFinite(current.gustThreshold) || current.gustThreshold < 1 || current.gustThreshold > 100))) {
+          setDeliveryError('Choisis au moins un seuil entre 1 et 100 nœuds.');
+          return;
         }
+        // Keep the permission request directly in the user gesture for Safari.
+        if (await Notification.requestPermission() !== 'granted') {
+          setDeliveryError('Autorise les notifications dans les paramètres du navigateur pour activer les alertes.');
+          return;
+        }
+        const config = await getPushConfig();
+        const usePush = supportsPush(config);
+        const next = { ...currentSettings, [sourceId]: { ...current, enabled: true } };
         if (usePush) {
-          config ||= await getPushConfig();
-          const registration = await navigator.serviceWorker.ready;
-          let subscription = await registration.pushManager.getSubscription();
-          if (!subscription) {
-            subscription = await registration.pushManager.subscribe({
-              userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(config.publicKey),
-            });
-          }
-          await savePushSubscription(subscription, nextSettings);
+          const registration = await withTimeout(navigator.serviceWorker.ready);
+          let subscription = await withTimeout(registration.pushManager.getSubscription());
+          if (!subscription) subscription = await withTimeout(registration.pushManager.subscribe({
+            userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(config.publicKey),
+          }));
+          await savePushSubscription(subscription, next);
           setPushSubscribed(true);
         }
+        setPushConfigured(usePush);
+        setPushSubscribed(usePush);
+        settingsRef.current = next;
+        setSettings(next);
         delete previousValues.current[sourceId];
         delete lastNotificationTimes.current[sourceId];
-        setSettings(nextSettings);
-        const parts = [];
-        if (current.avgEnabled) parts.push(`moy ≥ ${current.avgThreshold} kts`);
-        if (current.gustEnabled) parts.push(`raf ≥ ${current.gustThreshold} kts`);
-        await showNotification('Alertes activées 🌬️', {
-          body: `${sourceName} — ${parts.join(' ET ')}${usePush ? ' · actives même app fermée' : ''}`,
+        // Confirmation failure must not imply that a successful subscription failed.
+        void showNotification('Alertes activées 🌬️', {
+          body: `${sourceName} · ${usePush ? 'actives même app fermée' : "uniquement lorsque l’application est ouverte"}`,
           icon: '/icon-192.png',
-        });
-      } catch (error) {
-        setDeliveryError("L'abonnement Push a échoué. Réessaie après avoir vérifié la connexion.");
-        console.error('Push subscription failed', error);
-      }
-      return;
-    }
-
-    const nextSettings = {
-      ...settings,
-      [sourceId]: { ...current, enabled: false },
-    };
-    try {
-      if (pushConfigured) {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.getSubscription();
+        }).catch(() => {});
+      } else {
+        const next = { ...currentSettings, [sourceId]: { ...current, enabled: false } };
+        // Always check the device subscription, even if config lookup previously failed.
+        const registration = navigator.serviceWorker
+          ? await withTimeout(navigator.serviceWorker.getRegistration()) : null;
+        const subscription = registration?.pushManager
+          ? await withTimeout(registration.pushManager.getSubscription()) : null;
         if (subscription) {
-          const anyEnabled = Object.values(nextSettings).some((value) => value.enabled);
-          if (anyEnabled) await savePushSubscription(subscription, nextSettings);
+          if (Object.values(next).some(value => value.enabled)) await savePushSubscription(subscription, next);
           else {
             await removePushSubscription(subscription);
             setPushSubscribed(false);
           }
         }
+        settingsRef.current = next;
+        setSettings(next);
       }
-      setSettings(nextSettings);
-    } catch (error) {
-      setDeliveryError("Impossible de désactiver l'alerte sur le serveur. Réessaie dans un instant.");
-      console.error('Push unsubscription failed', error);
+    } catch (err) {
+      setDeliveryError(err.message === 'unsupported'
+        ? "Ce navigateur ne permet pas les notifications. Sur iPhone/iPad, installe l’application sur l’écran d’accueil."
+        : current.enabled
+          ? "Désactivation non confirmée. L’alerte reste active ; réessaie avec une connexion."
+          : "Activation non confirmée. Vérifie la connexion puis réessaie.");
+    } finally {
+      busyRef.current = false;
+      setIsBusy(false);
     }
-  }, [pushConfigured, settings]);
+  }, []);
 
   useEffect(() => {
-    if (pushSubscribed || !allWindData || Object.keys(allWindData).length === 0) return;
+    if (pushConfigured !== false || isBusy || pushSubscribed || !allWindData || Object.keys(allWindData).length === 0) return;
     if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
     if (checkTimerRef.current) clearTimeout(checkTimerRef.current);
     checkTimerRef.current = setTimeout(() => {
@@ -205,7 +236,7 @@ export function useNotifications(allWindData) {
         const alert = settings[source.id];
         if (!alert?.enabled || (!alert.avgEnabled && !alert.gustEnabled)) return;
         const live = allWindData[source.id]?.live;
-        if (!live) return;
+        if (!isAlertObservationFresh(allWindData[source.id], now)) return;
         const gust = Number.parseFloat(live.windGust);
         const avg = Number.parseFloat(live.windSpeed);
         const previous = previousValues.current[source.id] || {};
@@ -231,12 +262,12 @@ export function useNotifications(allWindData) {
         if (!met || (!crossed && now - lastTime < NOTIF_COOLDOWN)) return;
         showNotification(`⚠️ Alerte ${source.name}`, {
           body: parts.join(' · '), icon: '/icon-192.png', tag: `alert-${source.id}`,
-        });
+        }).catch(() => {});
         lastNotificationTimes.current[source.id] = now;
       });
     }, 500);
     return () => { if (checkTimerRef.current) clearTimeout(checkTimerRef.current); };
-  }, [allWindData, pushSubscribed, settings]);
+  }, [allWindData, pushSubscribed, pushConfigured, isBusy, settings]);
 
-  return { settings, update, toggle, pushConfigured, pushSubscribed, deliveryError, DEFAULT_SETTINGS };
+  return { settings, update, toggle, isBusy, pushConfigured, pushSubscribed, deliveryError, DEFAULT_SETTINGS };
 }

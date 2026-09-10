@@ -129,7 +129,7 @@ export default function HistoricalChart({ data }) {
   ];
 
   return (
-    <div className="glass-panel historical-chart-container" style={{ height: hasDirection ? '660px' : '500px' }}>
+    <div className="glass-panel historical-chart-container">
       
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
         <h3 className="widget-title" style={{ margin: 0 }}>📈 Historique Vent & Météo</h3>

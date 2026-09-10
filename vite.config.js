@@ -10,7 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: null,
       workbox: {
-        importScripts: ['/push-sw.js']
+        importScripts: ['/push-sw.js'],
+        navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/proxy(?:\/|$)/]
       },
       manifest: {
         name: 'Beacon Live — Télémétrie Maritime',

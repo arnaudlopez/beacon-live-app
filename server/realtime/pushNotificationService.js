@@ -1,3 +1,6 @@
+import { Buffer } from 'node:buffer';
+import { ECDH } from 'node:crypto';
+import { isAlertObservationFresh } from '../../shared/weatherFreshness.js';
 const DEFAULT_COOLDOWN_MS = 15 * 60 * 1000;
 
 function clone(value) {
@@ -12,7 +15,7 @@ function finiteThreshold(value) {
 function normalizeAlerts(alerts) {
   if (!alerts || typeof alerts !== 'object' || Array.isArray(alerts)) return {};
   const normalized = {};
-  for (const [sourceId, value] of Object.entries(alerts)) {
+  for (const [sourceId, value] of Object.entries(alerts).slice(0, 32)) {
     if (!value?.enabled || typeof sourceId !== 'string' || sourceId.length > 100) continue;
     const avgThreshold = finiteThreshold(value.avgThreshold);
     const gustThreshold = finiteThreshold(value.gustThreshold);
@@ -34,20 +37,23 @@ function normalizeAlerts(alerts) {
 }
 
 function normalizeSubscription(subscription) {
-  if (!subscription || typeof subscription.endpoint !== 'string' || subscription.endpoint.length > 4096 || !subscription.endpoint.startsWith('https://')) {
-    throw new Error('invalid_push_subscription');
-  }
-  if (typeof subscription.keys?.p256dh !== 'string' || typeof subscription.keys?.auth !== 'string') {
-    throw new Error('invalid_push_subscription_keys');
-  }
-  return {
-    endpoint: subscription.endpoint,
-    expirationTime: subscription.expirationTime ?? null,
-    keys: {
-      p256dh: subscription.keys.p256dh,
-      auth: subscription.keys.auth,
-    },
-  };
+  let url;
+  try { url = new URL(subscription?.endpoint); } catch { throw new Error('invalid_push_subscription'); }
+  const trusted = url.hostname === 'fcm.googleapis.com'
+    || url.hostname === 'updates.push.services.mozilla.com'
+    || url.hostname.endsWith('.push.apple.com')
+    || url.hostname.endsWith('.notify.windows.com');
+  if (!trusted || url.protocol !== 'https:' || url.username || url.password || url.port || url.hash
+    || subscription.endpoint.length > 4096) throw new Error('invalid_push_subscription');
+  const { p256dh, auth } = subscription.keys || {};
+  try {
+    if (typeof p256dh !== 'string' || typeof auth !== 'string'
+      || !/^[A-Za-z0-9_-]+={0,2}$/.test(p256dh) || !/^[A-Za-z0-9_-]+={0,2}$/.test(auth)) throw new Error();
+    const key = Buffer.from(p256dh, 'base64url');
+    if (key.length !== 65 || key[0] !== 4 || Buffer.from(auth, 'base64url').length !== 16) throw new Error();
+    ECDH.convertKey(key, 'prime256v1');
+  } catch { throw new Error('invalid_push_subscription_keys'); }
+  return { endpoint: subscription.endpoint, expirationTime: subscription.expirationTime ?? null, keys: { p256dh, auth } };
 }
 
 function conditionsFor(alert, windInfo, previous) {
@@ -83,10 +89,15 @@ export async function createPushNotificationService({
   clock = { now: () => Date.now() },
   cooldownMs = DEFAULT_COOLDOWN_MS,
   logger = globalThis.console,
+  maxSubscriptions = 1000,
 }) {
   if (!store?.loadState || !store?.saveState) throw new Error('push service requires a store');
   const loaded = await store.loadState();
-  let subscriptions = Array.isArray(loaded.subscriptions) ? loaded.subscriptions : [];
+  let subscriptions = (Array.isArray(loaded.subscriptions) ? loaded.subscriptions : []).filter(record => {
+    try { normalizeSubscription(record.subscription); return true; } catch { return false; }
+  }).slice(0, maxSubscriptions);
+  let pendingSnapshot = null;
+  let delivery = null;
   let writeQueue = Promise.resolve();
 
   function isConfigured() {
@@ -105,6 +116,7 @@ export async function createPushNotificationService({
     const normalizedSubscription = normalizeSubscription(subscription);
     const normalizedAlerts = normalizeAlerts(alerts);
     const index = subscriptions.findIndex((item) => item.subscription?.endpoint === normalizedSubscription.endpoint);
+    if (index < 0 && subscriptions.length >= maxSubscriptions) throw new Error('push_capacity_reached');
     const previous = index >= 0 ? subscriptions[index] : null;
     const previousValues = previous?.previousValues ?? {};
     const lastNotificationTimes = previous?.lastNotificationTimes ?? {};
@@ -140,7 +152,7 @@ export async function createPushNotificationService({
     return { removed: subscriptions.length !== before };
   }
 
-  async function handleSnapshot(snapshot) {
+  async function deliverSnapshot(snapshot) {
     if (!isConfigured() || !snapshot?.windData) return { sent: 0, removed: 0 };
     const now = clock.now();
     let sent = 0;
@@ -150,6 +162,7 @@ export async function createPushNotificationService({
     for (const record of [...subscriptions]) {
       let expired = false;
       for (const [sourceId, alert] of Object.entries(record.alerts ?? {})) {
+        if (!subscriptions.includes(record) || !isAlertObservationFresh(snapshot.windData[sourceId], clock.now())) continue;
         const result = conditionsFor(alert, snapshot.windData[sourceId], record.previousValues?.[sourceId]);
         if (result.values) {
           record.previousValues ??= {};
@@ -169,7 +182,7 @@ export async function createPushNotificationService({
           url: `/?source=${encodeURIComponent(sourceId)}`,
         });
         try {
-          await sender.sendNotification(record.subscription, payload, { TTL: 120 });
+          await sender.sendNotification(record.subscription, payload, { TTL: 120, timeout: 5000 });
           record.lastNotificationTimes ??= {};
           record.lastNotificationTimes[sourceId] = now;
           sent += 1;
@@ -191,6 +204,23 @@ export async function createPushNotificationService({
 
     if (changed) await persist();
     return { sent, removed };
+  }
+
+  function handleSnapshot(snapshot) {
+    // Coalesce bursts while a Push provider is slow; do not accumulate deliveries.
+    pendingSnapshot = snapshot;
+    if (!delivery) delivery = (async () => {
+      const total = { sent: 0, removed: 0 };
+      while (pendingSnapshot) {
+        const next = pendingSnapshot;
+        pendingSnapshot = null;
+        const result = await deliverSnapshot(next);
+        total.sent += result.sent;
+        total.removed += result.removed;
+      }
+      return total;
+    })().finally(() => { delivery = null; });
+    return delivery;
   }
 
   return {

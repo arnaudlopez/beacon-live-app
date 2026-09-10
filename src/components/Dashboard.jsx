@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from 'react';
 import { Wind, Thermometer, Droplets, Compass, Activity, Bell, BellOff } from 'lucide-react';
 import { format } from 'date-fns';
-import HistoricalChart from './HistoricalChart';
+import { isAlertObservationFresh } from '../../shared/weatherFreshness';
 import { useWeatherData } from '../hooks/useWeatherData';
 
 import { useNotifications } from '../hooks/useNotifications';
@@ -10,6 +10,7 @@ import { getBeaufort, degToCardinal } from '../utils/beaufort';
 import { isSourceAvailable, latestObservationTime } from '../utils/sourceAvailability';
 
 // Lazy-loaded heavy map components (Leaflet ~200KB)
+const HistoricalChart = lazy(() => import('./HistoricalChart'));
 const WindMapWidget = lazy(() => import('./WindMapWidget'));
 const SurfWidget = lazy(() => import('./SurfWidget'));
 
@@ -82,11 +83,11 @@ const WindCompass = React.memo(({ direction, delay }) => {
   );
 });
 
-export function SourceSelector({ sources, windData, activeSourceId, isLoading, onSourceSelect }) {
+export function SourceSelector({ sources, windData, activeSourceId, isLoading, onSourceSelect, now }) {
   return (
     <nav className="source-toggle-container" aria-label="Sélection de station">
       {sources.map((source) => {
-        const isUnavailable = !isLoading && !isSourceAvailable(source, windData[source.id]);
+        const isUnavailable = !isLoading && !isSourceAvailable(source, windData[source.id], now);
         const label = isUnavailable
           ? `${source.name} — indisponible temporairement`
           : source.name;
@@ -128,15 +129,27 @@ export default function Dashboard() {
     switchTimerRef.current = setTimeout(() => setActiveSourceRaw(source), 80);
   }, []);
 
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const updateTime = () => setNow(Date.now());
+    const timer = setInterval(updateTime, 30_000);
+    document.addEventListener('visibilitychange', updateTime);
+    return () => {
+      clearInterval(timer);
+      clearTimeout(switchTimerRef.current);
+      document.removeEventListener('visibilitychange', updateTime);
+    };
+  }, []);
+
   // All data via the local realtime weather backend.
-  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime } = useWeatherData();
+  const { windData, surfData, waterData, isLoading, lastUpdated, error: fetchError, isRealtime, connectionStatus, isCached, refresh } = useWeatherData();
 
   const notifications = useNotifications(windData);
 
   const fallbackSource = useMemo(() => {
-    if (isLoading || isSourceAvailable(activeSource, windData[activeSource.id])) return null;
-    return SOURCES.find(source => isSourceAvailable(source, windData[source.id])) || null;
-  }, [activeSource, isLoading, windData]);
+    if (isLoading || isSourceAvailable(activeSource, windData[activeSource.id], now)) return null;
+    return SOURCES.find(source => isSourceAvailable(source, windData[source.id], now)) || null;
+  }, [activeSource, isLoading, windData, now]);
 
   const displaySource = fallbackSource || activeSource;
 
@@ -176,7 +189,7 @@ export default function Dashboard() {
 
   // Persist active source
   useEffect(() => {
-    localStorage.setItem(ACTIVE_SOURCE_KEY, JSON.stringify(activeSource.id));
+    try { localStorage.setItem(ACTIVE_SOURCE_KEY, JSON.stringify(activeSource.id)); } catch { /* Optional preference. */ }
   }, [activeSource]);
 
   // Error message (suppress during loading)
@@ -194,7 +207,7 @@ export default function Dashboard() {
 
   const currentAlertSettings = notifications.settings[displaySource.id] || notifications.DEFAULT_SETTINGS;
   const beaufort = weatherData ? getBeaufort(weatherData.windGust) : null;
-  const isLocked = currentAlertSettings.enabled;
+  const isLocked = currentAlertSettings.enabled || notifications.isBusy;
 
   const thresholdInputStyle = (active) => ({
     width: '44px', background: active ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.15)',
@@ -208,7 +221,7 @@ export default function Dashboard() {
     <div className="dashboard-container">
       <header className="dashboard-header">
         <div className="dashboard-subtitle">
-          <div className="live-dot" role="status" aria-label="Indicateur temps réel"></div>
+          <div className={`live-dot ${isRealtime ? '' : 'live-dot-paused'}`} role="status" aria-label={isRealtime ? 'Temps réel connecté' : 'Temps réel interrompu'}></div>
           {displaySource.name}
         </div>
         <h1 className="dashboard-title">🌊 Beacon Live</h1>
@@ -221,6 +234,7 @@ export default function Dashboard() {
 
       <SourceSelector
         sources={SOURCES}
+        now={now}
         windData={windData}
         activeSourceId={displaySource.id}
         isLoading={isLoading}
@@ -269,9 +283,9 @@ export default function Dashboard() {
             const wind = windData[s.id];
             const gust = wind?.live ? parseFloat(wind.live.windGust) : 0;
             const avg = wind?.live ? parseFloat(wind.live.windSpeed) : 0;
-            let allMet = true;
-            if (ss.gustEnabled && gust < ss.gustThreshold) allMet = false;
-            if (ss.avgEnabled && avg < ss.avgThreshold) allMet = false;
+            let allMet = isAlertObservationFresh(wind, now);
+            if (ss.gustEnabled && (!Number.isFinite(gust) || gust < ss.gustThreshold)) allMet = false;
+            if (ss.avgEnabled && (!Number.isFinite(avg) || avg < ss.avgThreshold)) allMet = false;
             const isCurrent = s.id === displaySource.id;
             return (
               <span
@@ -279,6 +293,7 @@ export default function Dashboard() {
                 className={`alert-spot-indicator ${allMet ? 'alert-spot-over' : ''} ${isCurrent ? 'alert-spot-current' : ''}`}
                 title={`${s.name}: moy ${avg} / raf ${gust} kts`}
                 onClick={() => setActiveSource(SOURCES.find(src => src.id === s.id))}
+                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setActiveSource(s); } }}
                 role="button"
                 tabIndex={0}
               >
@@ -287,16 +302,33 @@ export default function Dashboard() {
             );
           })}
           <button
+            disabled={notifications.isBusy}
+            aria-busy={notifications.isBusy}
             onClick={() => notifications.toggle(displaySource.id, displaySource.name)}
             className={`source-toggle-btn ${currentAlertSettings.enabled ? 'active' : ''}`}
             style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: currentAlertSettings.enabled ? 'var(--accent-orange)' : undefined, color: currentAlertSettings.enabled ? 'var(--bg-primary)' : 'white', fontSize: '0.8rem', padding: '0.4rem 0.8rem' }}
           >
             {currentAlertSettings.enabled ? <Bell size={14} /> : <BellOff size={14} />}
-            {currentAlertSettings.enabled ? 'ON' : 'OFF'}
+            {notifications.isBusy ? '…' : currentAlertSettings.enabled ? 'ON' : 'OFF'}
           </button>
         </div>
       </div>
 
+      <p className="delivery-status" role="status">
+        {notifications.pushConfigured === null ? 'Alertes : vérification de la connexion…'
+          : notifications.pushSubscribed ? 'Alertes actives même lorsque l’application est fermée.'
+            : notifications.pushConfigured ? 'Alertes sur cet appareil : abonnement à activer.'
+              : 'Alertes locales : l’application doit rester ouverte au premier plan.'}
+      </p>
+      {(isCached || connectionStatus === 'offline') && (
+        <div className="connection-notice" role="status">
+          {connectionStatus === 'offline' ? 'Hors ligne. ' : ''}
+          {lastUpdated ? 'Dernières données conservées ; elles seront actualisées au retour de la connexion.' : 'Aucune donnée sauvegardée sur cet appareil.'}
+        </div>
+      )}
+      {weatherData && !isAlertObservationFresh(windData[displaySource.id], now) && (
+        <div className="connection-notice" role="status">Mesure ancienne ou station en difficulté — affichée pour consultation, exclue des alertes.</div>
+      )}
       {errorMessage && <div className="error-message" role="alert">{errorMessage}</div>}
       {notifications.deliveryError && <div className="error-message" role="alert">{notifications.deliveryError}</div>}
 
@@ -313,11 +345,11 @@ export default function Dashboard() {
       {weatherData && (
         <>
           <Suspense fallback={<SkeletonMap />}>
-            <WindMapWidget allWindData={windData} activeSourceId={displaySource.id} sources={SOURCES} onSourceSelect={setActiveSource} />
+            <WindMapWidget now={now} allWindData={windData} activeSourceId={displaySource.id} sources={SOURCES} onSourceSelect={setActiveSource} />
           </Suspense>
 
           {historyData.length >= 2 ? (
-            <HistoricalChart data={historyData} />
+            <Suspense fallback={<div className="skeleton skeleton-chart" />}><HistoricalChart data={historyData} /></Suspense>
           ) : (
             <div className="history-pending glass-panel" role="status">
               Première mesure reçue — historique en cours de constitution.
@@ -347,15 +379,16 @@ export default function Dashboard() {
       </Suspense>
 
       <div className="status-bar glass-panel" style={{ padding: '0.8rem 1.2rem', marginTop: '2rem', transition: 'border-color 0.3s ease', borderColor: isRealtime ? 'rgba(34, 197, 94, 0.6)' : undefined }} role="status">
-        <span>{errorMessage ? '🔴 Hors ligne' : '🟢 Connecté'}</span>
+        <span>{{ live: '🟢 Temps réel connecté', polling: '🟢 Actualisation périodique', offline: '⚪ Hors ligne', paused: '⏸ En pause', connecting: 'Connexion…', reconnecting: '🟠 Reconnexion…' }[connectionStatus] || 'Connexion…'}</span>
         {isRealtime && (
           <span style={{ marginLeft: '0.8rem', color: '#22c55e', fontWeight: 700, fontSize: '0.8rem', animation: 'fadeIn 0.3s ease' }}>
             ⚡ Données reçues
           </span>
         )}
         <span style={{ float: 'right' }}>
-          Mis à jour : {format(lastUpdated, 'HH:mm:ss')}
+          {lastUpdated ? `Données du ${format(lastUpdated, 'dd/MM à HH:mm:ss')}` : 'En attente de données'}
         </span>
+        <button className="source-toggle-btn" onClick={refresh} disabled={connectionStatus === 'offline'}>Actualiser</button>
       </div>
     </div>
   );

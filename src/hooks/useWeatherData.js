@@ -1,27 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-
-/**
- * @typedef {import('../types').AllWindData} AllWindData
- * @typedef {import('../types').AllSurfData} AllSurfData
- * @typedef {import('../types').WaterData} WaterData
- */
-
-/**
- * Weather data hook backed by the local realtime weather API.
- * 
- * Flow:
- * 1. On mount: fetch a full snapshot from /api/weather
- * 2. Subscribe to /api/events for SSE updates
- * 3. On weather:update: merge the new snapshot into state
- * 4. Fallback: poll every 60s in case SSE drops
- * 
- * Returns: { windData, surfData, waterData, isLoading, lastUpdated, error, isRealtime }
- */
+import { isWeatherSnapshot, loadWeatherSnapshot, saveWeatherSnapshot, recordConnectionEvent } from '../utils/weatherSnapshot';
 
 const BACKEND_URL = import.meta.env.VITE_WEATHER_BACKEND_URL || '/api';
-
-// Fallback polling interval (only used if SSE is down)
+const CACHE_KEY = `beacon_weather_v1:${BACKEND_URL}`;
 const FALLBACK_POLL_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 12_000;
+const HEARTBEAT_TIMEOUT_MS = 45_000;
 
 function normalizeBackendUrl(url) {
   return url ? url.replace(/\/$/, '') : '';
@@ -74,94 +58,185 @@ function normalizeBackendSnapshot(snapshot = {}) {
 }
 
 export function useWeatherData() {
-  const [windData, setWindData] = useState({});
-  const [surfData, setSurfData] = useState({});
-  const [waterData, setWaterData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState(new Date());
+  const [cached] = useState(() => loadWeatherSnapshot(CACHE_KEY));
+  const [data, setData] = useState(() => normalizeBackendSnapshot(cached || {}));
+  const [isLoading, setIsLoading] = useState(!cached);
+  const [lastUpdated, setLastUpdated] = useState(() => cached ? new Date(cached.ts) : null);
   const [error, setError] = useState('');
-  const [isRealtime, setIsRealtime] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [isCached, setIsCached] = useState(Boolean(cached));
+  const refreshRef = useRef(() => {});
+  const refresh = useCallback(() => refreshRef.current(), []);
 
-  const realtimeResetRef = useRef(null);
-
-  const markRealtime = useCallback(() => {
-    setIsRealtime(true);
-    if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
-    realtimeResetRef.current = setTimeout(() => setIsRealtime(false), 3000);
-  }, []);
-
-  const applyBackendSnapshot = useCallback((snapshot, realtime = false) => {
-    const normalized = normalizeBackendSnapshot(snapshot);
-    setWindData(normalized.windData);
-    setSurfData(normalized.surfData);
-    setWaterData(normalized.waterData);
-    setLastUpdated(snapshot.ts ? new Date(snapshot.ts) : new Date());
-    setError('');
-    setIsLoading(false);
-    if (realtime) markRealtime();
-  }, [markRealtime]);
-
-  // Initial fetch + setup SSE
   useEffect(() => {
-    let cancelled = false;
-    const backendUrl = normalizeBackendApiUrl(BACKEND_URL);
+    let disposed = false;
     let eventSource = null;
+    let reconnectTimer = null;
+    let retryCount = 0;
+    let lastHeartbeat = 0;
+    let streamHealthy = false;
+    let request = null;
+    let acceptedSequence = 0;
+    let latestSnapshot = null;
+    let lastPoll = 0;
+    const backendUrl = normalizeBackendApiUrl(BACKEND_URL);
+    const active = () => !disposed && document.visibilityState !== 'hidden' && navigator.onLine !== false;
+    const status = (value) => { if (!disposed) setConnectionStatus(value); };
 
-    const fetchBackendSnapshot = async () => {
+    function accept(snapshot) {
+      if (!isWeatherSnapshot(snapshot)) throw new Error('invalid_snapshot');
+      if (latestSnapshot) {
+        if (snapshot.streamId && snapshot.streamId === latestSnapshot.streamId) {
+          if (snapshot.revision < latestSnapshot.revision) return;
+        } else if (!snapshot.streamId && Date.parse(snapshot.ts) < Date.parse(latestSnapshot.ts)) return;
+      }
+      latestSnapshot = snapshot;
+      acceptedSequence += 1;
+      setData(normalizeBackendSnapshot(snapshot));
+      setLastUpdated(new Date(snapshot.ts));
+      setError('');
+      setIsLoading(false);
+      setIsCached(false);
+      saveWeatherSnapshot(CACHE_KEY, snapshot);
+    }
+
+    function cancelRequest() {
+      if (!request) return;
+      const previous = request;
+      request = null;
+      clearTimeout(previous.timeout);
+      previous.controller.abort();
+    }
+
+    async function fetchSnapshot() {
+      if (!active() || request) return;
+      const pending = { controller: new AbortController(), sequence: acceptedSequence, startedAt: Date.now() };
+      request = pending;
+      lastPoll = Date.now();
+      recordConnectionEvent('fetch:start');
+      const failure = (reason) => {
+        if (request !== pending || !active() || pending.sequence !== acceptedSequence) return;
+        setIsLoading(false);
+        setError('Connexion interrompue. Nouvelle tentative automatique…');
+        status('reconnecting');
+        recordConnectionEvent('fetch:failed', { reason, durationMs: Date.now() - pending.startedAt });
+      };
+      pending.timeout = setTimeout(() => {
+        failure('timeout');
+        if (request === pending) cancelRequest();
+      }, REQUEST_TIMEOUT_MS);
       try {
-        const res = await fetch(`${backendUrl}/weather`, {
-          headers: {
-            Accept: 'application/json',
-          },
+        const response = await fetch(`${backendUrl}/weather`, {
+          headers: { Accept: 'application/json' }, cache: 'no-store', signal: pending.controller.signal,
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const snapshot = await res.json();
-        if (!cancelled) applyBackendSnapshot(snapshot);
-        return snapshot;
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const snapshot = await response.json();
+        if (request !== pending || !active() || pending.sequence !== acceptedSequence) return;
+        accept(snapshot);
+        status(streamHealthy ? 'live' : 'polling');
+        recordConnectionEvent('fetch:ok', { durationMs: Date.now() - pending.startedAt });
       } catch (err) {
-        if (!cancelled) {
-          setError(`Connexion backend échouée: ${err.message}`);
-          setIsLoading(false);
+        failure(err.name === 'AbortError' ? 'aborted' : err.message === 'invalid_snapshot' ? 'invalid_snapshot' : /^HTTP \d+$/.test(err.message) ? err.message : 'network');
+      } finally {
+        clearTimeout(pending.timeout);
+        if (request === pending) request = null;
+      }
+    }
+
+    function closeStream() {
+      eventSource?.close();
+      eventSource = null;
+      streamHealthy = false;
+    }
+
+    function retryStream() {
+      closeStream();
+      if (!active() || reconnectTimer) return;
+      status('reconnecting');
+      const delay = Math.min(30_000, 1000 * 2 ** Math.min(retryCount++, 5)) + Math.random() * 500;
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        openStream();
+      }, delay);
+      recordConnectionEvent('sse:retry', { delayMs: Math.round(delay) });
+      void fetchSnapshot();
+    }
+
+    function openStream() {
+      if (!active() || eventSource || typeof EventSource === 'undefined') return;
+      const stream = new EventSource(`${backendUrl}/events`);
+      eventSource = stream;
+      lastHeartbeat = Date.now();
+      const valid = () => active() && eventSource === stream;
+      const healthy = () => {
+        lastHeartbeat = Date.now();
+        streamHealthy = true;
+        retryCount = 0;
+        status('live');
+      };
+      const payload = (event) => {
+        if (!valid()) return;
+        try {
+          const value = JSON.parse(event.data);
+          accept(value.data || value);
+          healthy();
+        } catch {
+          recordConnectionEvent('sse:invalid');
+          retryStream();
         }
-        return null;
-      }
-    };
+      };
+      stream.addEventListener('weather:snapshot', payload);
+      stream.addEventListener('weather:update', payload);
+      stream.addEventListener('weather:status', payload);
+      stream.addEventListener('heartbeat', () => { if (valid()) healthy(); });
+      stream.addEventListener('error', () => { if (valid()) retryStream(); });
+    }
 
-    const handleSsePayload = (event, realtime = false) => {
-      try {
-        const payload = JSON.parse(event.data);
-        const snapshot = payload.data || payload;
-        if (!cancelled) applyBackendSnapshot(snapshot, realtime);
-      } catch (err) {
-        if (!cancelled) setError(`Flux temps réel invalide: ${err.message}`);
-      }
-    };
+    function suspend() {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+      cancelRequest();
+      closeStream();
+      status(navigator.onLine === false ? 'offline' : 'paused');
+      if (navigator.onLine === false) setIsLoading(false);
+      recordConnectionEvent('suspended');
+    }
 
-    const openEventSource = () => {
-      if (typeof EventSource === 'undefined') return;
+    function resume() {
+      if (!active()) { suspend(); return; }
+      recordConnectionEvent('resumed');
+      openStream();
+      void fetchSnapshot();
+    }
 
-      eventSource = new EventSource(`${backendUrl}/events`);
-      eventSource.addEventListener('weather:snapshot', (event) => handleSsePayload(event));
-      eventSource.addEventListener('weather:update', (event) => handleSsePayload(event, true));
-      eventSource.addEventListener('error', () => {
-        eventSource?.close();
-        fetchBackendSnapshot();
-      });
-    };
-
-    fetchBackendSnapshot().then(() => {
-      if (!cancelled) openEventSource();
-    });
-
-    const backendInterval = setInterval(fetchBackendSnapshot, FALLBACK_POLL_MS);
+    // Start both transports independently: a stalled HTTP request must not block SSE.
+    resume();
+    refreshRef.current = resume;
+    document.addEventListener('visibilitychange', resume);
+    window.addEventListener('pageshow', resume);
+    window.addEventListener('pagehide', suspend);
+    window.addEventListener('online', resume);
+    window.addEventListener('offline', suspend);
+    const watchdog = setInterval(() => {
+      if (!active()) return;
+      if (eventSource && Date.now() - lastHeartbeat > HEARTBEAT_TIMEOUT_MS) retryStream();
+      if (!streamHealthy && Date.now() - lastPoll >= FALLBACK_POLL_MS) void fetchSnapshot();
+    }, 5000);
 
     return () => {
-      cancelled = true;
-      clearInterval(backendInterval);
-      if (realtimeResetRef.current) clearTimeout(realtimeResetRef.current);
-      eventSource?.close();
+      disposed = true;
+      clearInterval(watchdog);
+      clearTimeout(reconnectTimer);
+      cancelRequest();
+      closeStream();
+      refreshRef.current = () => {};
+      document.removeEventListener('visibilitychange', resume);
+      window.removeEventListener('pageshow', resume);
+      window.removeEventListener('pagehide', suspend);
+      window.removeEventListener('online', resume);
+      window.removeEventListener('offline', suspend);
     };
-  }, [applyBackendSnapshot]);
+  }, []);
 
-  return { windData, surfData, waterData, isLoading, lastUpdated, error, isRealtime };
+  return { ...data, isLoading, lastUpdated, error, isRealtime: connectionStatus === 'live', connectionStatus, isCached, refresh };
 }

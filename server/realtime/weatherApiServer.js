@@ -68,6 +68,8 @@ export function createWeatherApiServer({
   }
 
   const clients = new Set();
+  let mutationWindow = clock.now();
+  let mutationCount = 0;
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url, 'http://127.0.0.1');
@@ -76,6 +78,11 @@ export function createWeatherApiServer({
       res.writeHead(204, CORS_HEADERS);
       res.end();
       return;
+    }
+
+    if (url.pathname === '/api/push/subscriptions' && ['POST', 'DELETE'].includes(req.method)) {
+      if (clock.now() - mutationWindow >= 60_000) { mutationWindow = clock.now(); mutationCount = 0; }
+      if (++mutationCount > 120) { writeJson(res, 429, { error: 'too_many_requests' }); return; }
     }
 
     if (url.pathname === '/api/push/public-key' && req.method === 'GET') {
@@ -97,7 +104,7 @@ export function createWeatherApiServer({
         writeJson(res, 200, { ok: true, ...result });
       } catch (error) {
         const badRequest = ['invalid_json', 'request_too_large', 'invalid_push_subscription', 'invalid_push_subscription_keys'].includes(error?.message);
-        writeJson(res, badRequest ? 400 : 503, { error: error?.message || 'push_subscription_failed' });
+        writeJson(res, badRequest ? 400 : error?.message === 'push_capacity_reached' ? 429 : 503, { error: error?.message || 'push_subscription_failed' });
       }
       return;
     }
@@ -181,25 +188,31 @@ export function createWeatherApiServer({
       });
       res.flushHeaders?.();
 
+      if (clients.size >= 500) { res.end(); return; }
       const client = { res };
+      const writeFrame = (event) => {
+        if (res.destroyed) return;
+        if (res.writableLength > 2 * 1024 * 1024) { res.destroy(); return; }
+        res.write(formatSseEvent(event));
+      };
       clients.add(client);
-      res.write(formatSseEvent({
+      writeFrame({
         type: 'weather:snapshot',
         data: runtime.getSnapshot(),
-      }));
+      });
 
       const heartbeatId = setInterval(() => {
         if (!res.destroyed) {
-          res.write(formatSseEvent({
+          writeFrame({
             type: 'heartbeat',
             ts: new Date().toISOString(),
-          }));
+          });
         }
       }, heartbeatMs);
 
       const unsubscribe = runtime.subscribe((event) => {
-        if (!res.destroyed && event.type === 'weather:update') {
-          res.write(formatSseEvent(event));
+        if (!res.destroyed && ['weather:update', 'weather:status'].includes(event.type)) {
+          writeFrame(event);
         }
       });
 

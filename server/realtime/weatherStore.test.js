@@ -93,3 +93,15 @@ describe('file weather store contract', () => {
     ]);
   });
 });
+
+it('serializes overlapping observations and snapshot writes without data loss', async () => {
+  const store = createFileWeatherStore({ filePath: await makeStorePath() });
+  await Promise.all([
+    store.appendObservation({ sourceId: 'one', payload: { value: 1 } }),
+    store.saveSnapshot({ ts: '2026-09-10T08:00:00Z', windData: {}, sourceHealth: {} }),
+    store.appendObservation({ sourceId: 'two', payload: { value: 2 } }),
+  ]);
+  const state = await store.loadState();
+  expect(state.observations.map(value => value.sourceId)).toEqual(['one', 'two']);
+  expect(state.snapshot.ts).toBe('2026-09-10T08:00:00Z');
+});
